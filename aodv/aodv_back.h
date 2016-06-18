@@ -54,13 +54,6 @@ typedef std::vector<Packet*> VecP;
 typedef std::vector<nsaddr_t> VecAddr;
 typedef std::vector<int> VecInt;
 typedef std::queue<Packet*> QueueP;
-typedef std::map<nsaddr_t, int> MapInt;
-
-//#define BATCH_SIZE 10
-#define MAXBATCH_SIZE 100
-#define COMPLETION_RATIO 0.9
-#define MAX_BATCH 2
-#define nNodes 38
 //---exor
 
 /*
@@ -245,50 +238,15 @@ class AODV: public Agent {
         //---- exor -----------------------
 	//member vars
         //VecP pktBuffer;//stores all the received data pkts
-	//QueueP pktBuffer;//stores all the received data pkts in a FIFO fashion
-//vars for local packet buffer
-	bool packetBuffer[BATCH_SIZE]; //only stores the pktnum
-	Packet *pBuffer[BATCH_SIZE]; //the actual pointer
-
-	int BatchId; // cur batch id
-//----------------------------
-
-
-    VecAddr localForwarderList; //local copy, same for whole batch
+	QueueP pktBuffer;//stores all the received data pkts in a FIFO fashion
+        VecAddr localForwarderList; //local copy, same for whole batch
 	ForwardingTimer fTimer; //timer controling data packet forwarding
 	
 	int lastReceivedFragNum; //# of pkt tran-ed = (new fragnum - lastReceivedFragNum)
 	double lastReceivedTime; //the time the lastReceivedFragNum was received
 	double curRate; //measured tran rate of the cur sender = # of pkt tran-ed / time used
-	nsaddr_t curNode; //id of the cur sending node
         double leftPktToSend;
-	int localBatchMap[BATCH_SIZE]; //local batch map
-	MapInt localForwarderMap; //for easy access  
-
-
-	//for constructing new packet
-	int fragSize;
-	int nextFragNum, nextPktNum;
-
-	//for completion
-	bool curBatchCompleted();
-
-	//helper
-	int getPriority(nsaddr_t nid);
-
-	//generate batchID for source node
-	int nextBatchId, pktNum;
-
-	//special case for dest node
-#define ACK_SIZE 10
-	Packet  *acks[ACK_SIZE]; //prepare ten acks 
-	bool ackReady;
-
-	float etx[nNodes][nNodes];	// etx values
-
-	//for multi- batch
-	Packet *backupBuffer[MAXBATCH_SIZE]; //the actual pointer
-
+	VecInt localBatchMap; //local batch map
 	//---- exor---------------------
 
 
@@ -378,40 +336,8 @@ class AODV: public Agent {
 
 
 	//--- exor
-	bool   shouldParticipate(Packet *pkt); //check whether this node should participate
-	bool   updateLocalBatchMap(Packet *pkt); 
-	void   updateLocalPacketBuffer(Packet *pkt); 
 	double estimateDataRate(Packet *pkt); //compute the cur rate and pss EWMA
-	double computeBackOffTime(Packet *pkt); //take into account all special cases
-
-	//for source node only
-	int getNextBatchId();
-	int getNextPktNum();
-        void constructForwarderList(Packet *p);
-	void constructBatchMap(Packet *p);
-	bool isBatchReady();
-
-	//helpers
-	int    getFragmentSize();
-	int    getNextFragment();
-	int	   getNextPacketNum();
-	bool	needTransmit(int pNum);
-	Packet *preparePacket(int pNum, int fragNum, int fSz);
-	int getForwarderNum();
-	void transmitAllFragments();
-	void resetForwardingTimer(double waitTime);
-
-	Packet * createAck(Packet *op, int fragNum);
-	Packet * copyPacket(Packet* op);
-	void printPkt(Packet *p);
-	
-	//void readRM();
-        void read_orderRM();
-	void prDstEtx(float num[]);
-	void prFwList(int num[]);
-	void quickSort(float numbers[], int array_size, int idx[]);
-	void q_sort(float numbers[], int left, int right, int idx[]);
-
+	double computeBackOffTime(); //take into account all special cases
 	//---- exor
 
         /*

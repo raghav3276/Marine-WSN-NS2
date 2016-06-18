@@ -23,13 +23,87 @@ OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
 WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
 OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
+ 
 The AODV code developed by the CMU/MONARCH group was optimized and tuned by Samir Das and Mahesh Marina, University of Cincinnati. The work was partially done in Sun Microsystems.
 */
-
+ 
 
 #include <aodv/aodv_rtable.h>
 //#include <cmu/aodv/aodv.h>
+
+
+
+
+
+
+
+//------- exor
+bool NNode::addNeighbor(nsaddr_t nid, double linkCost)
+{
+        
+      neighbors.insert(std::make_pair(nid, linkCost));
+      if(neighbors.find(nid)->first == nid)
+	  return true;
+      return false;		      
+}
+
+Network::Network(int s)
+{
+     size = s;
+     nodes.reserve(size);
+     fList.reserve(size);    
+}
+
+void Network::populate() //hack: hard-code the network topology
+{
+     int i;
+
+     //create all nodes with their ids
+     nodes.clear();
+     nodes.reserve(size);
+     for(i =0;i<size;i++)
+       nodes.push_back(NNode(i));   
+
+     //add all links
+     nodes[0].addNeighbor(1, 1.);
+     nodes[0].addNeighbor(2, 2.);
+
+     nodes[1].addNeighbor(0, 1.);
+     nodes[1].addNeighbor(3, 1.);
+
+     nodes[2].addNeighbor(0, 2.);
+     nodes[2].addNeighbor(3, 1.);
+
+     nodes[3].addNeighbor(1, 1.);
+     nodes[3].addNeighbor(2, 1.);
+}
+
+void Network::computeFList()
+{
+  //for now this list is constructed outside
+  // we will move all the computation inside 
+     
+
+     //create all nodes with their ids
+     fList.clear();
+     fList.reserve(size);
+
+     fList.push_back(3);
+     fList.push_back(1);
+     fList.push_back(2);
+     fList.push_back(0);  
+}
+
+//------- exor
+
+
+
+
+
+
+
+
+
 
 /*
   The Routing Table

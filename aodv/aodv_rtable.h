@@ -37,8 +37,58 @@ The AODV code developed by the CMU/MONARCH group was optimized and tuned by Sami
 #include <lib/bsd-list.h>
 #include <scheduler.h>
 
+//--- exor -----
+#include <map>
+#include <vector>
+typedef std::map<nsaddr_t, double> NeighborMap;
+
+//--- exor -----
+
+
+
+ 
+
 #define CURRENT_TIME    Scheduler::instance().clock()
 #define INFINITY2        0xff
+
+
+
+
+
+//------------ exor
+
+// we hard code the whole network toplogy info on each node 
+// in order to save thesimulation of link state
+class NNode {
+        friend class Network;
+ public:
+        NNode(u_int32_t a) { addr = a; }
+        bool addNeighbor(nsaddr_t nid, double linkCost);
+
+        nsaddr_t        addr; //my own address, id
+	NeighborMap     neighbors; //map neighbor id to link cost
+        
+};
+
+
+typedef std::vector<NNode> NodeVec;
+typedef std::vector<int> intVec;
+class Network{
+ public:
+  Network(int s);
+  void populate();
+  void computeFList();
+
+  int size;
+  NodeVec nodes;
+  intVec  fList;
+  
+};
+
+//------------ exor
+
+
+
 
 /*
    AODV Neighbor Cache Entry

@@ -43,10 +43,6 @@ The AODV code developed by the CMU/MONARCH group was optimized and tuned by Sami
 //#define DEBUG
 //#define ERROR
 
-//#define EXOR_DBG
-
-
-
 #ifdef DEBUG
 static int extra_route_reply = 0;
 static int limit_route_request = 0;
@@ -57,19 +53,6 @@ static int route_request = 0;
 /*
   TCL Hooks
 */
-
-//--------- exor -- 
-//should be changed according to tcl file
-#define BANDWIDTH 1000000
-#define MAC_HDR  80	// 52
-#define IP_HDR   20
-#define PAY_LOAD 512    //1024 yanhua modified cbr size to 512 too, and totally pkt size is 612 now
-#define MAX_WAIT 1000
-//the time it takes the device to transmit a pkt (in sec)
-#define ONE_PKT_TIME ((double)(PAY_LOAD+IP_HDR+MAC_HDR)/(double) (BANDWIDTH/8))
-//the measured time from ns-2 is around 0.003 sec / packet
-//--------- exor
-
 
 
 int hdr_aodv::offset_;
@@ -141,7 +124,7 @@ AODV::command(int argc, const char*const* argv) {
     else if (strcmp(argv[1], "port-dmux") == 0) {
     	dmux_ = (PortClassifier *)TclObject::lookup(argv[2]);
 	if (dmux_ == 0) {
-		fprintf (stdout, "%s: %s lookup of %s failed\n", __FILE__,
+		fprintf (stderr, "%s: %s lookup of %s failed\n", __FILE__,
 		argv[1], argv[2]);
 		return TCL_ERROR;
 	}
@@ -169,44 +152,6 @@ AODV::AODV(nsaddr_t id) : Agent(PT_AODV),
 
   logtarget = 0;
   ifqueue = 0;
-
-  //--exor
-	lastReceivedFragNum = -1; //meaning no pkt received yet
-	lastReceivedTime = -1.;
-	curRate = -1.;
-	localBatchMap[0] = -1; //indicating it is not init-ed yet for the new batch
-	BatchId = -1;// indicating ready for new batch and 
-
-	nextBatchId = -1;
-	pktNum = -1;
-	
-	curNode = -1; //no cur Sending node initially
-        //resetForwardingTimer(MAX_WAIT*ONE_PKT_TIME);
-
-
-	//init local packet buffer
-	for(int i = 0; i<BATCH_SIZE; i++)
-	  packetBuffer[i] = false;
-	ackReady = false;
- //---------------yanhua-0304-------------------- 
- // readRM();
- read_orderRM();
- //---------------yanhua-0304-------------------- 
-  //--exor
-}
-
-int
-AODV::getNextBatchId()
-{
-  nextBatchId++;
-  return nextBatchId;
-}
-
-int
-AODV::getNextPktNum()
-{
-  pktNum++;
-  return pktNum;
 }
 
 /*
@@ -215,47 +160,38 @@ AODV::getNextPktNum()
 
 void
 BroadcastTimer::handle(Event*) {
-  /*agent->id_purge();
+  agent->id_purge();
   Scheduler::instance().schedule(this, &intr, BCAST_ID_SAVE);
-  */
 }
 
 void
 HelloTimer::handle(Event*) {
-  /*agent->sendHello();
-  double interval = MinHelloInterval + 
-                ((MaxHelloInterval - MinHelloInterval) * Random::uniform());
+   agent->sendHello();
+   double interval = MinHelloInterval + 
+                 ((MaxHelloInterval - MinHelloInterval) * Random::uniform());
    assert(interval >= 0);
-   Scheduler::instance().schedule(this, &intr, interval);*/
+   Scheduler::instance().schedule(this, &intr, interval);
 }
 
 void
 NeighborTimer::handle(Event*) {
-  /*
   agent->nb_purge();
   Scheduler::instance().schedule(this, &intr, HELLO_INTERVAL);
-  */
 }
 
 void
 RouteCacheTimer::handle(Event*) {
-  /*
   agent->rt_purge();
 #define FREQUENCY 0.5 // sec
   Scheduler::instance().schedule(this, &intr, FREQUENCY);
-  */
 }
 
 //---exor
 void
 ForwardingTimer::expire(Event* e) {
-  //first send all fragments
-  //fprintf(stdout,"Node %d  ------ Timer fires at %f ---- \n",agent->index, CURRENT_TIME);
-  agent->transmitAllFragments();
-  //reschedule the timer
-  //Scheduler::instance().schedule(this, &intr, MAX_WAIT*ONE_PKT_TIME);
-  resched((double)(MAX_WAIT*ONE_PKT_TIME)); 
-  //listen for a while, can be shortened, how long to wait for next round if no pkt recevied anymore
+  //agent->rt_purge(); //to be changed --- trigger data forwarding
+  //#define FREQUENCY 0.5 // sec
+  //Scheduler::instance().schedule(this, &intr, FREQUENCY);
 }
 //--- exor
 
@@ -265,7 +201,7 @@ aodv_rt_entry *rt;
 struct hdr_ip *ih = HDR_IP( (Packet *)p);
 
    /* you get here after the timeout in a local repair attempt */
-   /*	fprintf(stdout, "%s\n", __FUNCTION__); */
+   /*	fprintf(stderr, "%s\n", __FUNCTION__); */
 
 
     rt = agent->rtable.rt_lookup(ih->daddr());
@@ -281,7 +217,7 @@ struct hdr_ip *ih = HDR_IP( (Packet *)p);
       agent->rt_down(rt);
       // send RERR
 #ifdef DEBUG
-      fprintf(stdout,"Node %d: Dst - %d, failed local repair\n",index, rt->rt_dst);
+      fprintf(stderr,"Node %d: Dst - %d, failed local repair\n",index, rt->rt_dst);
 #endif      
     }
     Packet::free((Packet *)p);
@@ -436,7 +372,7 @@ struct hdr_aodv_error *re = HDR_AODV_ERROR(rerr);
      re->unreachable_dst[re->DestCount] = rt->rt_dst;
      re->unreachable_dst_seqno[re->DestCount] = rt->rt_seqno;
 #ifdef DEBUG
-     fprintf(stdout, "%s(%f): %d\t(%d\t%u\t%d)\n", __FUNCTION__, CURRENT_TIME,
+     fprintf(stderr, "%s(%f): %d\t(%d\t%u\t%d)\n", __FUNCTION__, CURRENT_TIME,
 		     index, re->unreachable_dst[re->DestCount],
 		     re->unreachable_dst_seqno[re->DestCount], rt->rt_nexthop);
 #endif // DEBUG
@@ -449,7 +385,7 @@ struct hdr_aodv_error *re = HDR_AODV_ERROR(rerr);
 
  if (re->DestCount > 0) {
 #ifdef DEBUG
-   fprintf(stdout, "%s(%f): %d\tsending RERR...\n", __FUNCTION__, CURRENT_TIME, index);
+   fprintf(stderr, "%s(%f): %d\tsending RERR...\n", __FUNCTION__, CURRENT_TIME, index);
 #endif // DEBUG
    sendError(rerr, false);
  }
@@ -461,7 +397,7 @@ struct hdr_aodv_error *re = HDR_AODV_ERROR(rerr);
 void
 AODV::local_rt_repair(aodv_rt_entry *rt, Packet *p) {
 #ifdef DEBUG
-  fprintf(stdout,"%s: Dst - %d\n", __FUNCTION__, rt->rt_dst); 
+  fprintf(stderr,"%s: Dst - %d\n", __FUNCTION__, rt->rt_dst); 
 #endif  
   // Buffer the packet 
   rqueue.enque(p);
@@ -567,7 +503,7 @@ aodv_rt_entry *rt;
    re->unreachable_dst_seqno[re->DestCount] = rt->rt_seqno;
    re->DestCount += 1;
 #ifdef DEBUG
-   fprintf(stdout, "%s: sending RERR...\n", __FUNCTION__);
+   fprintf(stderr, "%s: sending RERR...\n", __FUNCTION__);
 #endif
    sendError(rerr, false);
 
@@ -591,7 +527,7 @@ Packet *p;
 	assert(rt->rt_hops != INFINITY2);
      while((p = rqueue.deque(rt->rt_dst))) {
 #ifdef DEBUG
-       fprintf(stdout, "%s: calling drop()\n",
+       fprintf(stderr, "%s: calling drop()\n",
                        __FUNCTION__);
 #endif // DEBUG
        drop(p, DROP_RTR_NO_ROUTE);
@@ -625,744 +561,15 @@ Packet *p;
 
 }
 
-//---------------exor
 /*
-  Forward Timer 
-  Estimate the data transmission rate of a node (of higher priority)
-  this function should be called only if this node is within the forwarderlist
+  Forward Timer
 */
 double 
-AODV::estimateDataRate(Packet * p){
+AODV::estimateDataRate(Packet * pkt){
 
-#define alpha 0.9
-//cur imp not efficient but easy to debug
-
-        double curTime = CURRENT_TIME;
-
-#ifdef EXOR_DBG
-	//fprintf(stdout, "%s: cur time = %f\n", __FUNCTION__, curTime);
-#endif 
-       
-       struct hdr_cmn *ch = HDR_CMN(p);
-       if(curNode != ch->sender_addr) //new sending node, restart estimation process
-	 {
-	   curNode = ch->sender_addr;
-	   lastReceivedTime = curTime;
-	   lastReceivedFragNum = ch->FragNum;
-	   curRate = -1.0; //not ready to give estimate
-	   return curRate;
-	 }
-
-       //now it must be at least the 2nd pkt from the same sender
-       //we are ready to estimate	
-       if((lastReceivedFragNum >= 0) && (lastReceivedTime >= 0))//for safety
-	{
-		int numPktLeft = ch->FragNum - lastReceivedFragNum ;
-		if (numPktLeft < 0) 
-			numPktLeft = 0;
-		//double curTime = CURRENT_TIME;
-		//assert((curTime - lastReceivedTime) > 0.000001);
-		if((curTime - lastReceivedTime) < 0.000001)
-		  return curRate; //no need to process this pkt (caused by ns-2)
-		double rate = (double) numPktLeft / (double) (curTime - lastReceivedTime);
-
-		//fprintf(stdout, "%s:  numPktLeft, curTime-lastReceivedTime = %d:%f !!!\n", 
-		// __FUNCTION__, numPktLeft, curTime-lastReceivedTime);
-
-
-		//EWMA
-		if(curRate > 0.)
-			curRate = alpha * rate + (1.- alpha)*curRate;
-		else
-			curRate = rate; //first rate estimation
-
-	}	
-
-	lastReceivedTime = curTime;
-	lastReceivedFragNum = ch->FragNum;
-
-#ifdef EXOR_DBG
-       fprintf(stdout, "%s: cur rate = %f\n",
-                       __FUNCTION__, curRate);
-#endif
-
-       if(ch->FragNum == (ch->FragSz-1)) //already last pkt
-	 curNode = -1;//mark for next estimation, needed to distinguish two sending sessions of the same node
-
-	return curRate;//negative number means not sufficient info to compute rate
-	
+  return 0.;
 }
 
-bool   
-AODV::shouldParticipate(Packet *p)
-{
-	bool should = false;
-	struct hdr_cmn *ch = HDR_CMN(p);
-	VecAddr::iterator it;
-	
-	for(int i =0;i<ch->FwdListSize;i++)	  
-	  {
-	    if(ch->F_List[i] == index)
-		{
-			should = true;
-			break;
-		}
-	  }
-
-	return should;
-}
-
-int 
-AODV::getPriority(nsaddr_t nid) //lower numer --> higher priority
-{
-	MapInt::iterator it = localForwarderMap.find(nid);
-	return it->second;
-}
-
-
-bool   
-AODV::updateLocalBatchMap(Packet *p)
-{
-	bool changed = false;
-	struct hdr_cmn *ch = HDR_CMN(p);
-	int i;
-	//receivedBatchMap = ch->BatchMap;
-	  //int curPriority, rP; 
-	
-	if(localBatchMap[0] < 0) //indicating the map is not inited yet
-	{
-		for (i = 0;i <BATCH_SIZE; i++)
-		{
-			localBatchMap[i] = ch->BatchMap[i];
-		}
-		changed = true;
-	}
-	else
-	{
-		for (i = 0;i <BATCH_SIZE; i++)
-		{
-			if(getPriority(ch->BatchMap[i]) <  getPriority(localBatchMap[i]))
-			{
-				localBatchMap[i] = ch->BatchMap[i];
-				changed = true;
-			}
-		}
-	}
-	/*
-#ifdef EXOR_DBG
-	//fprintf(stdout, "%s:  ------- done !!! ---------\n", __FUNCTION__);
-    for(int j=0;j<BATCH_SIZE;j++)
-      fprintf(stdout, "%s:  batchmap for pktNums %d  = %d !!!\n", __FUNCTION__, j, localBatchMap[j]);
-#endif // DEBUG
-	*/
-	return changed;
-}
-
-Packet *
-AODV::createAck(Packet *op, int fragNum)
-{
-  struct hdr_cmn *cho = HDR_CMN(op);
-  //struct hdr_ip *iho = HDR_IP(op);
-
-  Packet * p = allocpkt();
-  struct hdr_cmn *ch = HDR_CMN(p);
-  struct hdr_ip *ih = HDR_IP(p);
-
-  //copy/set general fields
-  ch->ptype_ = cho->ptype_;
-  ch->direction() = hdr_cmn::DOWN;//important
-  ch->size() = cho->size();
-  ch->error() = 0;
-  ch->next_hop() = IP_BROADCAST;//important
-  ch->addr_type() = NS_AF_INET;
-
-  ih->saddr() = index; //key
-  ih->daddr() = IP_BROADCAST; //key
-  ih->sport() = RT_PORT;
-  ih->dport() = RT_PORT;
-  ih->ttl() = IP_DEF_TTL;
-
- 
-  //set fields specfic for exor, complete copy
-  //ch->Ver = cho->Ver;
-  //ch->HdrLen = cho->HdrLen;
-  ch->BatchId = cho->BatchId;
-  ch->PktNum = cho->PktNum;
-  ch->BatchSz = cho->BatchSz;
-  ch->FragNum = fragNum;
-  ch->FragSz = ACK_SIZE;
-  ch->FwdListSize = cho->FwdListSize;
-  ch->ForwardernNum = cho->ForwardernNum;
-  for(int i =0;i<MAX_FWDER;i++)
-    ch->F_List[i] = cho->F_List[i]; 
-  for(int i =0;i<BATCH_SIZE;i++)
-    ch->BatchMap[i] = cho->BatchMap[i]; 
-  //ch->checksum = cho->checksum;
-  ch->sender_addr = index;
-  ch->PayloadLen = 0; 
-  
-  return p;
-}
-
-void   
-AODV::updateLocalPacketBuffer(Packet *p)
-{
-	struct hdr_cmn *ch = HDR_CMN(p);
-	struct hdr_ip *ih = HDR_IP(p);
-
-	if(BatchId < 0) 
-	  {
-		BatchId = ch->BatchId;
-		//first time, the local ForwarderList needs to be updated
-		if(localForwarderList.size()<=0)
-		  {
-		    for(int i =0;i<ch->FwdListSize;i++)
-		      localForwarderList.push_back(ch->F_List[i]);
-		  }
-
-		//for dest node only, the first time receiving a pkt, populate the ack array
-		if(ih->daddr() == index){
-		  for(int i = 0;i <ACK_SIZE; i++){
-		    acks[i] = createAck(p, i);
-		  }
-		  ackReady = true;
-		}
-	  }
-
-	if((ch->PayloadLen != 0) && (packetBuffer[ch->PktNum] == false)){
-	  packetBuffer[ch->PktNum] = true;
-	  pBuffer[ch->PktNum] = copyPacket(p); //create a new one and drop the old one, only the first time
-	}
-
-
-//set local batch map for this particular pkt
-	int thisP= getPriority(index); //this node's priority
-	if(getPriority(localBatchMap[ch->PktNum])>thisP)
-	  localBatchMap[ch->PktNum] = index; //save the cur node id 
-
-	/*
-#ifdef EXOR_DBG
-    fprintf(stdout, "%s:  done !!!\n", __FUNCTION__);
-    for(int j=0;j<BATCH_SIZE;j++)
-      if(packetBuffer[j])
-	fprintf(stdout, "%s:  recevied pktNums include %d  !!!\n", __FUNCTION__, j);
-
-#endif // DEBUG
-	*/
-
-}
-
-bool
-AODV::curBatchCompleted()
-{
-#ifdef EXOR_DBG
-  // fprintf(stdout, "%s:  done !!!\n", __FUNCTION__);
-#endif // DEBUG  
-
-	int count = 0;
-	int thisP= getPriority(index); //this node's priority
-	for(int i =0;i<BATCH_SIZE;i++)
-	{
-		if(getPriority(localBatchMap[i]) < thisP) //already received by higher priority nodes
-			count++;
-	}
-
-#ifdef EXOR_DBG
-	//fprintf(stdout, "%s:  done !!!\n", __FUNCTION__);
-#endif // DEBUG  
-	
-	return ((count/BATCH_SIZE) >= COMPLETION_RATIO);	
-}
-
-
-bool
-AODV::needTransmit(int pNum)
-{
-	if (packetBuffer[pNum] == false)
-		return false;
-	int thisP= getPriority(index); //this node's priority
-	if(getPriority(localBatchMap[pNum])>=thisP)
-		return true;
-	return false;
-}
-
-int
-AODV::getFragmentSize() //it sets up  the first one already
-{
-	fragSize = 0;
-	nextFragNum = -1;
-	for(int i =0 ;i<BATCH_SIZE; i++)
-	{
-		if (needTransmit(i))
-		{
-			if(nextFragNum < 0) 
-			{
-				nextFragNum = 0;
-				nextPktNum = i;
-			}
-				
-			fragSize ++;
-		}
-	}
-
-	return fragSize;
-}
-
-int
-AODV::getNextFragment()
-{
-
-	int tmp = nextPktNum;
-
-
-
-	if (nextPktNum == (BATCH_SIZE -1)) //already last one
-	{
-		nextPktNum = -1;
-		return nextPktNum;
-	}
-
-
-		
-	for(int i =nextPktNum+1 ;i<BATCH_SIZE; i++)
-	{
-		if (needTransmit(i))
-		{			
-				nextFragNum++;
-				nextPktNum = i;
-				break;
-		}
-	}
-
-	if (nextPktNum == tmp) //indicating no more pkt to be send for this batch
-	{
-		nextPktNum = -1;
-	}
-	
-	return nextPktNum;
-	
-}
-
-int
-AODV::getForwarderNum()
-{
-  //make sure local f list was inited...
-
-  int i=0;
-  int s = localForwarderList.size();
-  for(i=0;i<s;i++)   
-    {
-      if(localForwarderList[i]==index)
-	return i;
-    }
-  return -1;//If the sending node is not in the forwarder list
-            //It should forward the packet, so it should not happend. comments by yanhua.
-}
-
-Packet *
-AODV::preparePacket(int pNum, int fragNum, int fSz)
-{
-
-  if(ackReady){ //the ack packet to be sent by dest
-    struct hdr_cmn *ch = HDR_CMN(acks[fragNum]);
-    //struct hdr_ip* ih = HDR_IP(acks[fragNum]);
-
-    //set fields specfic for exor
-    ch->FragNum=fragNum;
-    ch->FragSz = fSz;
-    ch->ForwardernNum = getForwarderNum();
-    for(int i =0;i<BATCH_SIZE;i++)
-      ch->BatchMap[i] = localBatchMap[i];
-    ch->sender_addr = index; //important for rate estimation
-
-
-    //set general fields 
-    ch->direction() = hdr_cmn::DOWN; //important
-    ch->size() = IP_HDR+MAC_HDR;
-    ch->error() = 0;
-    ch->next_hop() = IP_BROADCAST; //important
-    ch->addr_type() = NS_AF_INET;
-  
-
-    return acks[fragNum];
-  }
-  else{
-    struct hdr_cmn *ch = HDR_CMN(pBuffer[pNum]);
-    struct hdr_ip* ih = HDR_IP(pBuffer[pNum]);
-
-    //set fields specfic for exor
-    ch->FragNum=fragNum;
-    ch->FragSz = fSz;
-    ch->ForwardernNum = getForwarderNum();
-    for(int i =0;i<BATCH_SIZE;i++)
-      ch->BatchMap[i] = localBatchMap[i];
-    ch->sender_addr = index; //important for rate estimation
-
-
-    if(ih->daddr() == here_.addr_){
-      ih->daddr() = IP_BROADCAST;
-      ch->PayloadLen = 0; //if it dest node, only broadcast batch map
-    }
-    else
-      ch->PayloadLen =PAY_LOAD;
-
-
-    //set general fields 
-    ch->direction() = hdr_cmn::DOWN; //important
-    ch->size() = IP_HDR+MAC_HDR+PAY_LOAD;
-    ch->error() = 0;
-    ch->next_hop() = IP_BROADCAST; //important
-    ch->addr_type() = NS_AF_INET;
-  
-
-    return pBuffer[pNum];
-  }
-}
-
-#define RATE_TH 0.000001
-double 
-AODV::computeBackOffTime(Packet *pkt){
-//check the forwarder list and find the position of the curNode
-//compute the expected needed time for curNode
-// for each other node 5 pkt durations
-
-
-	struct hdr_cmn *ch = HDR_CMN(pkt);
-	VecAddr::iterator it;
-	if(localForwarderList.size() == 0) //non-inited yet, localforwarderlist should be cleared when a new batch is in effect
-	{//save a local copy	
-	 	
-		for(int i =0; i< ch->FwdListSize; i++) //it is acutally an array
-		{
-			localForwarderList.push_back(ch->F_List[i]);
-			localForwarderMap.insert(std::make_pair(ch->F_List[i], i));
-			
-		}
-
-
-	}
-
-	assert(localForwarderList.size()>0);
-
-	double backoffTime = 0;
-	double defaultBackoffTime = 5*ONE_PKT_TIME; // 
-	bool shouldCount = true; //check all higher priorty nodes
-	for(it = localForwarderList.begin();it<localForwarderList.end(); ++it)
-	{
-
-	  //fprintf(stdout, "%s:  inside loop (*it) = %d!!!\n", __FUNCTION__, (*it));
-
-	  if(shouldCount)//handles all nodes w/ higher priorty
-	    {
-	      if((*it)==index) //skip myself
-		{
-		  shouldCount = false;
-		  continue; //in case the sender is a lower priority one, should let it finish anyway
-		}
-
-	      if((*it) == curNode)  
-		{
-		  if(curRate < RATE_TH) //too slow or not valid at all
-				backoffTime += defaultBackoffTime;
-			else
-				backoffTime += (double) (ch->FragSz - ch->FragNum - 1) / (double) curRate;
-		}
-	      else
-		backoffTime += defaultBackoffTime; //for all nodes w/ higher priorty
-	      //fprintf(stdout, "%s:  inside loop backoffTime %f!!!\n", __FUNCTION__, defaultBackoffTime);
-	    }
-	  else
-	    {
-
-	      if((*it) == curNode)  
-		{
-			if(curRate < RATE_TH)
-				backoffTime += defaultBackoffTime;
-			else
-			  {
-				backoffTime += (double) (ch->FragSz - ch->FragNum - 1) / (double) curRate;			
-			  }
-		}
-	    }
-	}
-
-	//fprintf(stdout, "%s:  end  %f!!!\n", __FUNCTION__, backoffTime);
-	return backoffTime; //sec
-	
-}
-
-void 
-AODV::constructForwarderList(Packet *p)
-{
-  struct hdr_cmn *ch = HDR_CMN(p);
-  struct hdr_ip *ih = HDR_IP(p);
-  int i,j,dst_i;
-  float Cur_order,tmp_order;
-  float dstEtx[MAX_FWDER];
-  int fwList[MAX_FWDER];
-  int dst,src;
-  
-  dst = (int) ih->daddr();
-  //MAX_FWDER
-  ch->FwdListSize = MAX_FWDER; //4;
-  ch->ForwardernNum = MAX_FWDER - 1;  //3;//last one = source
-//--------------------------yanhua--0304---
-  src = index;
-  dst_i=0;
-  for (i=1;i<MAX_FWDER;i++) {
-      dstEtx[i]=-1;
-      fwList[i]=-1;
-  }
-  // sort all nodes according to the etx values for the destination
-  for (i=0;i<MAX_FWDER;i++) { 
-        Cur_order = etx[src][dst];
-        tmp_order = Cur_order-4+i;
-        if (tmp_order < 0) {
-            continue;
-        }
-        dst_i++;
-        for (j=1;j<nNodes;j++) {
-            if (tmp_order == etx[j][dst]) {
-  	        dstEtx[dst_i] = etx[j][dst];
-  	        fwList[dst_i] = j;
-                break;
-            }
-        }
-        #ifdef EXOR_DBG
-        if (j==nNodes) {
-            printf("yanhua : no suiable forwarder to the destination!!");
-        }
-        #endif
-  }
-  
-//  printf("before sort... \n");
-//  prDstEtx(dstEtx);
-//  prFwList(fwList);
-    
-//  quickSort(dstEtx, MAX_FWDER, fwList);
-
-//  printf("after sort... \n");
-//  prDstEtx(dstEtx);
-//  prFwList(fwList);
-  
-//--------------------------yanhua--0304---
-  for(i=0;i<MAX_FWDER;i++) {
-  	ch->F_List[i] = fwList[i];
-  	//ch->F_List[i] = MAX_FWDER-1-i;  	
-  }
-  
-  //ch->F_List[(int)ih->daddr()] = ch->F_List[0];
-  //ch->F_List[0] = ih->daddr();//highest priority
-  //ch->F_List[(int)index] = ch->F_List[37];
-  //ch->F_List[37] = index;//lowest priority
-    
-  //ch->F_List[0] = 3;//highest priority
-  //ch->F_List[1] = 2;
-  //ch->F_List[2] = 1;
-  //ch->F_List[3] = 0; //lowest
-  
-#ifdef EXOR_DBG
-  //    fprintf(stdout, "%s:  done !!!\n", __FUNCTION__);
-#endif // DEBUG
-}
-
-
-//this function should called only by source node when receiving a pkt from upper layer
-void 
-AODV::constructBatchMap(Packet *p)
-{
-  struct hdr_cmn *ch = HDR_CMN(p);
-  for(int i =0; i<ch->BatchSz; i++)
-    {
-      ch->BatchMap[i]= index; //only source node got it
-    }
-#ifdef EXOR_DBG
-  //fprintf(stdout, "%s:  done !!!\n", __FUNCTION__);
-#endif // DEBUG
-}
-
-//for source only
-bool
-AODV::isBatchReady()
-{
-  return (pktNum == (BATCH_SIZE-1));
-}
-
-
-
-void
-AODV::transmitAllFragments()
-{
-  double backoff = 0.;
-  Packet *p, *ghost;
-
-  if(ackReady){//i must be dest node
-    for(int i = 0; i<ACK_SIZE;i++){
-#ifdef EXOR_DBG
-    fprintf(stdout, "%s:  sending ack %d  !!!\n", __FUNCTION__, i);
-#endif // DEBUG   
-      p = preparePacket(0, i, ACK_SIZE);
-      // ghost = copyPacket(p); //make a copy for scheduler to destroy
-      ghost = p->copy();
-      Scheduler::instance().schedule(target_, ghost,
-                                          0);
-      backoff += ONE_PKT_TIME;
-    }
-
-  }
-  else{//non-dest node
-    int idx_pk_num;
-    int fSize = getFragmentSize();
- 
-    for(int i = 0; i<fSize;i++){
-
-      idx_pk_num = nextPktNum; 
-#ifdef EXOR_DBG
-      fprintf(stdout, "%s:  sending data Pkt %d  (frag num = %d) !!!\n", __FUNCTION__, idx_pk_num, i);
-#endif // DEBUG  
-
-      if(idx_pk_num < 0){
-	fprintf(stdout, "%s:  ERROR !!!sending data Pkt %d  (frag num = %d) !!!\n", __FUNCTION__, idx_pk_num, i);
-	exit(1);
-      }
-      p = preparePacket(idx_pk_num, i, fSize);
-      //ghost = copyPacket(p);
-      ghost = p->copy();
-      Scheduler::instance().schedule(target_, ghost,
-                                          0);
-      idx_pk_num = getNextFragment(); 
-      backoff += ONE_PKT_TIME;
-    }
-  }
-
-
-#ifdef EXOR_DBG
-    fprintf(stdout, "%s:  done !!!\n", __FUNCTION__);
-#endif // DEBUG                                                                               
-
-}
-
-
-/*
-// add a function to transmit all pkt in the buffer imediately
-// it should be called from the forwarder timer
-// the waiting time is handled by the forwarder timer setting/resetting
-
-void
-AODV::transmitAllFragments()
-{
-  double backoff = 0.;
-  Packet *p;
-
-  if(ackReady){//i must be dest node
-    for(int i = 0; i<ACK_SIZE;i++){
-#ifdef EXOR_DBG
-    fprintf(stdout, "%s:  sending ack %d  !!!\n", __FUNCTION__, i);
-#endif // DEBUG   
-      p = preparePacket(0, i, ACK_SIZE);
-      Scheduler::instance().schedule(target_, p,
-                                          backoff);
-      backoff += ONE_PKT_TIME;
-    }
-
-  }
-  else{//non-dest node
-    int idx_pk_num;
-    int fSize = getFragmentSize();
- 
-    for(int i = 0; i<fSize;i++){
-
-      idx_pk_num = nextPktNum; 
-#ifdef EXOR_DBG
-      fprintf(stdout, "%s:  sending data Pkt %d  (frag num = %d) !!!\n", __FUNCTION__, idx_pk_num, i);
-#endif // DEBUG  
-
-      if(idx_pk_num < 0){
-	fprintf(stdout, "%s:  ERROR !!!sending data Pkt %d  (frag num = %d) !!!\n", __FUNCTION__, idx_pk_num, i);
-	exit(1);
-      }
-      p = preparePacket(idx_pk_num, i, fSize);
-      Scheduler::instance().schedule(target_, p,
-                                          backoff);
-      idx_pk_num = getNextFragment(); 
-      backoff += ONE_PKT_TIME;
-    }
-  }
-
-
-#ifdef EXOR_DBG
-    fprintf(stdout, "%s:  done !!!\n", __FUNCTION__);
-#endif // DEBUG                                                                               
-
-}
-
-*/
-
-void
-AODV::resetForwardingTimer(double waitTime)
-{
-
-  if(waitTime <0)
-    {
-      fprintf(stdout, "node %d:  neg waitTime = %f !!!\n", index, waitTime);
-      waitTime = 0;
-    }
-  fTimer.resched(waitTime);
-}
-
- 
-//create a new packet (allocate new memory)
-//with same source and dest
-//and complete copy of  exor fields
-Packet *
-AODV::copyPacket(Packet* op)
-{
-  
-  struct hdr_cmn *cho = HDR_CMN(op);
-  struct hdr_ip *iho = HDR_IP(op);
-
-  Packet * p = allocpkt();
-  struct hdr_cmn *ch = HDR_CMN(p);
-  struct hdr_ip *ih = HDR_IP(p);
-
-  //copy/set general fields
-  ch->ptype_ = cho->ptype_;
-  ch->direction() = hdr_cmn::DOWN;//important
-  ch->size() = cho->size();
-  ch->error() = 0;
-  ch->next_hop() = IP_BROADCAST;//important
-  ch->addr_type() = NS_AF_INET;
-
-  ih->saddr() = iho->saddr(); //key
-  ih->daddr() = iho->daddr(); //key
-  ih->sport() = RT_PORT;
-  ih->dport() = RT_PORT;
-  ih->ttl() = IP_DEF_TTL;
-
- 
-  //set fields specfic for exor, complete copy
-  //ch->Ver = cho->Ver;
-  //ch->HdrLen = cho->HdrLen;
-  ch->BatchId = cho->BatchId;
-  ch->PktNum = cho->PktNum;
-  ch->BatchSz = cho->BatchSz;
-  ch->FragNum = cho->FragNum;
-  ch->FragSz = cho->FragSz;
-  ch->FwdListSize = cho->FwdListSize;
-  ch->ForwardernNum = cho->ForwardernNum;
-  for(int i =0;i<MAX_FWDER;i++)
-    ch->F_List[i] = cho->F_List[i]; 
-  for(int i =0;i<BATCH_SIZE;i++)
-    ch->BatchMap[i] = cho->BatchMap[i]; 
-  //ch->checksum = cho->checksum;
-  ch->sender_addr = cho->sender_addr;
-  ch->PayloadLen = cho->PayloadLen; 
- 
-  //Packet::free(op);//release the old packet
-  return p;
-}
-
-//--------------exor
 
 /*
   Packet Reception Routines
@@ -1373,216 +580,56 @@ AODV::recv(Packet *p, Handler*) {
 struct hdr_cmn *ch = HDR_CMN(p);
 struct hdr_ip *ih = HDR_IP(p);
 
+ assert(initialized());
+ //assert(p->incoming == 0);
+ // XXXXX NOTE: use of incoming flag has been depracated; In order to track direction of pkt flow, direction_ in hdr_cmn is used instead. see packet.h for details.
 
-assert(initialized());
-
-//if(ch->sender_addr == index)//received from itself
-//   return;
-
- 
- //control pkts, of no interest to exor
  if(ch->ptype() == PT_AODV) {
-   //ih->ttl_ -= 1;
-   //recvAODV(p);
-   drop(p, DROP_RTR_TTL);
+   ih->ttl_ -= 1;
+   recvAODV(p);
    return;
  }
 
 
-#ifdef EXOR_DBG
-    fprintf(stdout, "----------------- %s:  start recv of pkt in node %d  from node %d at time %f!!! ----------------------------\n", 
-	    __FUNCTION__, index, ch->sender_addr, CURRENT_TIME);
-    fprintf(stdout, "----------------- %s:  ch->FragNum, ch->FragSz, ch->PktNum = %d:%d:%d\n", __FUNCTION__,ch->FragNum, ch->FragSz, ch->PktNum );
-#endif // DEBUG   
-
-
- 
- //---exor---------------------------------------------
-
- //a data pkt originated from upper layer (only at source node)
+ /*
+  *  Must be a packet I'm originating...
+  */
 if((ih->saddr() == index) && (ch->num_forwards() == 0)) {
-  //fprintf(stdout, "%s: should e here only once !!!!!!!!!!!!!!! %d \n", __FUNCTION__,ch->BatchId );
- //Add the IP Header
+ /*
+  * Add the IP Header
+  */
    ch->size() += IP_HDR_LEN;
-   //we don't need to use ttl anymore ???
-   ih->ttl_ = NETWORK_DIAMETER;
-   
-
-   //set up all the header fields by GOD
-   //we should set batch Id if the current batch id is not set yet
-   if(BatchId <0)
-     ch->BatchId = getNextBatchId();
-
-#ifdef EXOR_DBG
-    fprintf(stdout, "%s: new BatchId = %d \n", __FUNCTION__,ch->BatchId );
-#endif // DEBUG
-
-
-   ch->PktNum = getNextPktNum();
-   
-   // choi
-   // send only one batch
-  if(ch->PktNum >= BATCH_SIZE) {
-        drop(p,DROP_RTR_QFULL);//Modified by yanhua
-//   	Packet::free (p);      //Modified by yanhua
-   	return;
-   }
-   
-#ifdef EXOR_DBG
-    fprintf(stdout, "%s: new PktNum = %d \n", __FUNCTION__,ch->PktNum );
-#endif // DEBUG
-    
-   //ch->Ver = 1;
-   //ch->HdrLen=10; //not useful anyway
-   //ch->PayloadLen = 512; //not used anyway
-   ch->BatchSz = BATCH_SIZE;
-   ch->FragNum = ch->PktNum;// in process of building up batch, pkt buffer = frag buffer
-   ch->FragSz = BATCH_SIZE;
-   constructForwarderList(p); //For pkt class- comments by yanhua
-   constructBatchMap(p);      //For pkt class- comments by yanhua
-   ch->ForwardernNum = getForwarderNum();
-   ch->PayloadLen = PAY_LOAD;
-   //no need to set checksum
-   
-   //handle general initialization
-    if(localForwarderList.size() == 0) //non-inited yet, localforwarderlist should be cleared when a new batch is in effect
-	{//save a local copy		
-		for(int i =0; i< ch->FwdListSize; i++) //it is acutally an array
-		{
-			localForwarderList.push_back(ch->F_List[i]);
-			localForwarderMap.insert(std::make_pair(ch->F_List[i], i));
-		}
-	}
-    //now update the local pkt buffer and batch map
-   updateLocalBatchMap(p);
-   updateLocalPacketBuffer(p);
-   Packet::free (p);
-   
-   //printf("after free at the source...\n");
-   
-   //estimate data rate (for init) and compute backoff time, no need for source
-   //estimateDataRate(p);
-   //computeBackOffTime(p);
-   if(isBatchReady())
-   {
-      //schedule transmission immediately
-      //transmitAllFragments();
-#ifdef EXOR_DBG
-      fprintf(stdout, "%s:Hi, yanhua. i am ready to send this batch!!! \n", __FUNCTION__);//DBG by yanhua.
-#endif // DEBUG
-      resetForwardingTimer(0.);
-   }
-
-#ifdef EXOR_DBG
-   //fprintf(stdout, "%s: iam here before return  \n", __FUNCTION__);
-#endif // DEBUG
-
-   
-   return; // no need for anything else
+   // Added by Parag Dadhania && John Novatnack to handle broadcasting
+   if ( (u_int32_t)ih->daddr() != IP_BROADCAST)
+     ih->ttl_ = NETWORK_DIAMETER;
 }
-
-
-
-
- //forwarder receives this packet- comments by yanhua
- //handle general initialization
-    if(localForwarderList.size() == 0) //non-inited yet, localforwarderlist should be cleared when a new batch is in effect
-	{//save a local copy	
-	  //int j=0;	
-		for(int i =0; i< ch->FwdListSize; i++) //it is acutally an array
-		{
-			localForwarderList.push_back(ch->F_List[i]);
-			localForwarderMap.insert(std::make_pair(ch->F_List[i], i));
-			//j++;
-		}
-
-
-	}
-
-#ifdef EXOR_DBG
-    fprintf(stdout, "%s:  before geneic handling!!!\n", __FUNCTION__);
-#endif // DEBUG
-    
-
-
-//--- now a generic data pkt (received from neighbors (already inited)) for all nodes, including source and dest
-   //always update the local pkt buffer and batch map
-    updateLocalBatchMap(p);
-
-    updateLocalPacketBuffer(p);
-
-    /*
-#ifdef EXOR_DBG
-    fprintf(stdout, "  --- current local batch map on node %d ----\n", index);
-    for(int j=0;j<BATCH_SIZE;j++)
-      fprintf(stdout, "%s:  batchmap for pktNums %d  = %d !!!\n", __FUNCTION__, j,localBatchMap[j]);
-    //for(int ii= 0;ii<ch->FwdListSize;ii++)
-    //fprintf(stdout, "%s:  priority for node %d  = %d !!!\n", __FUNCTION__, ii, getPriority(ii));
-#endif // DEBUG
-    */
-
-
-   
-   //estimate data rate (for init) and compute backoff time, no need for source
-   estimateDataRate(p);
-   double waitTime = computeBackOffTime(p);
-
-#ifdef EXOR_DBG
-    // yanhua DBG
-    fprintf(stdout, "%s:Hi, yanhua.Node %d ,  new waiting time = %f !!!\n", __FUNCTION__,index,waitTime);//DBG by yanhua.
-#endif // DEBUG
-
-   //reset the Forwarder Timer
-    resetForwardingTimer(waitTime);//the right one
-    //resetForwardingTimer(0.01 * Random::uniform());
-    //resetForwardingTimer(0.);
-
-//------------------------------------------------------------
-
-//if it is a data pkt destined for this node, deliver to upper layer
-/* if (ch->PayloadLen > 0 && ch->ptype() != PT_AODV && ch->direction() == hdr_cmn::UP &&
-	((u_int32_t)ih->daddr() == IP_BROADCAST)
-		|| (ih->daddr() == here_.addr_)) {
-*/
-
-
-//if it is a data pkt destined for this node, deliver to upper layer
-   FILE *OUTDATA;
-   if((OUTDATA=fopen("deliPkt.dat", "a"))== NULL) {
-   	printf("deliPkt.dat file open error\n");
-   }
-   
-//   if (ch->PayloadLen > 0 && ih->daddr() == here_.addr_){
-
-   //dmux_->recv(p,0);
-   //fprintf(stdout, "%s:  pkt %d delivered to dest %d !!!\n", __FUNCTION__, ch->PktNum, index);
-   fprintf(OUTDATA, "%.9f pkt seq %d from %d received -> by dst node %d !!!\n", CURRENT_TIME, ch->PktNum, ch->sender_addr, index);
-   
-   fclose(OUTDATA);
-   Packet::free (p); //print and free this pkt- comments by yanhua.
+ /*
+  *  I received a packet that I sent.  Probably
+  *  a routing loop.
+  */
+else if(ih->saddr() == index) {
+   drop(p, DROP_RTR_ROUTE_LOOP);
    return;
- //}
- //---exor-------------------------------------------------------------------------------------------------------
-
-   fclose(OUTDATA);
-#ifdef EXOR_DBG
-    // yanhua DBG
-    fprintf(stdout, "%s:Hi, yanhua. I should not be here, i am not a regular pkt !!!\n", __FUNCTION__);//DBG by yanhua.
-#endif // DEBUG
-   Packet::free (p);
+ }
+ /*
+  *  Packet I'm forwarding...
+  */
+ else {
+ /*
+  *  Check the TTL.  If it is zero, then discard.
+  */
+   if(--ih->ttl_ == 0) {
+     drop(p, DROP_RTR_TTL);
+     return;
+   }
+ }
+// Added by Parag Dadhania && John Novatnack to handle broadcasting
+ if ( (u_int32_t)ih->daddr() != IP_BROADCAST)
+   rt_resolve(p);
+ else
+   forward((aodv_rt_entry*) 0, p, NO_DELAY);
 }
 
-void
-AODV::printPkt(Packet *p)
-{
-  struct hdr_cmn *ch = HDR_CMN(p);
-  fprintf(stdout, "----- pkt printout start---- \n");
-  fprintf(stdout, "ch->PktNum %d,  ch->FragNum %d,ch->FragSz %d \n", ch->PktNum,  ch->FragNum,ch->FragSz);
-
-  //ch->ForwardernNum = cho->ForwardernNum;
-  fprintf(stdout," F_LIST[1]= %d, BatchMap[1] = %d  ", ch->F_List[1], ch->BatchMap[1]); 
-  fprintf(stdout, "----- pkt printout end ---- \n");
-}
 
 void
 AODV::recvAODV(Packet *p) {
@@ -1613,7 +660,7 @@ AODV::recvAODV(Packet *p) {
    break;
         
  default:
-   fprintf(stdout, "Invalid AODV type (%x)\n", ah->ah_type);
+   fprintf(stderr, "Invalid AODV type (%x)\n", ah->ah_type);
    exit(1);
  }
 
@@ -1634,7 +681,7 @@ aodv_rt_entry *rt;
 
   if(rq->rq_src == index) {
 #ifdef DEBUG
-    fprintf(stdout, "%s: got my own REQUEST\n", __FUNCTION__);
+    fprintf(stderr, "%s: got my own REQUEST\n", __FUNCTION__);
 #endif // DEBUG
     Packet::free(p);
     return;
@@ -1643,7 +690,7 @@ aodv_rt_entry *rt;
  if (id_lookup(rq->rq_src, rq->rq_bcast_id)) {
 
 #ifdef DEBUG
-   fprintf(stdout, "%s: discarding request\n", __FUNCTION__);
+   fprintf(stderr, "%s: discarding request\n", __FUNCTION__);
 #endif // DEBUG
  
    Packet::free(p);
@@ -1718,7 +765,7 @@ rt_update(rt0, rq->rq_src_seqno, rq->rq_hop_count, ih->saddr(),
  if(rq->rq_dst == index) {
 
 #ifdef DEBUG
-   fprintf(stdout, "%d - %s: destination sending reply\n",
+   fprintf(stderr, "%d - %s: destination sending reply\n",
                    index, __FUNCTION__);
 #endif // DEBUG
 
@@ -1800,7 +847,7 @@ char suppress_reply = 0;
 double delay = 0.0;
 	
 #ifdef DEBUG
- fprintf(stdout, "%d - %s: received a REPLY\n", index, __FUNCTION__);
+ fprintf(stderr, "%d - %s: received a REPLY\n", index, __FUNCTION__);
 #endif // DEBUG
 
 
@@ -1897,7 +944,7 @@ aodv_rt_entry *rt0 = rtable.rt_lookup(ih->daddr());
    else {
    // I don't know how to forward .. drop the reply. 
 #ifdef DEBUG
-     fprintf(stdout, "%s: dropping Route Reply\n", __FUNCTION__);
+     fprintf(stderr, "%s: dropping Route Reply\n", __FUNCTION__);
 #endif // DEBUG
      drop(p, DROP_RTR_NO_ROUTE);
    }
@@ -1925,7 +972,7 @@ struct hdr_aodv_error *nre = HDR_AODV_ERROR(rerr);
 	assert(rt->rt_flags == RTF_UP);
 	assert((rt->rt_seqno%2) == 0); // is the seqno even?
 #ifdef DEBUG
-     fprintf(stdout, "%s(%f): %d\t(%d\t%u\t%d)\t(%d\t%u\t%d)\n", __FUNCTION__,CURRENT_TIME,
+     fprintf(stderr, "%s(%f): %d\t(%d\t%u\t%d)\t(%d\t%u\t%d)\n", __FUNCTION__,CURRENT_TIME,
 		     index, rt->rt_dst, rt->rt_seqno, rt->rt_nexthop,
 		     re->unreachable_dst[i],re->unreachable_dst_seqno[i],
 	             ih->saddr());
@@ -1951,7 +998,7 @@ struct hdr_aodv_error *nre = HDR_AODV_ERROR(rerr);
 
  if (nre->DestCount > 0) {
 #ifdef DEBUG
-   fprintf(stdout, "%s(%f): %d\t sending RERR...\n", __FUNCTION__, CURRENT_TIME, index);
+   fprintf(stderr, "%s(%f): %d\t sending RERR...\n", __FUNCTION__, CURRENT_TIME, index);
 #endif // DEBUG
    sendError(rerr);
  }
@@ -1975,7 +1022,7 @@ struct hdr_ip *ih = HDR_IP(p);
  if(ih->ttl_ == 0) {
 
 #ifdef DEBUG
-  fprintf(stdout, "%s: calling drop()\n", __PRETTY_FUNCTION__);
+  fprintf(stderr, "%s: calling drop()\n", __PRETTY_FUNCTION__);
 #endif // DEBUG
  
   drop(p, DROP_RTR_TTL);
@@ -2068,7 +1115,7 @@ aodv_rt_entry *rt = rtable.rt_lookup(dst);
  }
 
 #ifdef DEBUG
-   fprintf(stdout, "(%2d) - %2d sending Route Request, dst: %d\n",
+   fprintf(stderr, "(%2d) - %2d sending Route Request, dst: %d\n",
                     ++route_request, index, rt->rt_dst);
 #endif // DEBUG
 
@@ -2111,7 +1158,7 @@ aodv_rt_entry *rt = rtable.rt_lookup(dst);
  rt->rt_expire = 0;
 
 #ifdef DEBUG
- fprintf(stdout, "(%2d) - %2d sending Route Request, dst: %d, tout %f ms\n",
+ fprintf(stderr, "(%2d) - %2d sending Route Request, dst: %d, tout %f ms\n",
 	         ++route_request, 
 		 index, rt->rt_dst, 
 		 rt->rt_req_timeout - CURRENT_TIME);
@@ -2158,7 +1205,7 @@ struct hdr_aodv_reply *rp = HDR_AODV_REPLY(p);
 aodv_rt_entry *rt = rtable.rt_lookup(ipdst);
 
 #ifdef DEBUG
-fprintf(stdout, "sending Reply from %d at %.2f\n", index, Scheduler::instance().clock());
+fprintf(stderr, "sending Reply from %d at %.2f\n", index, Scheduler::instance().clock());
 #endif // DEBUG
  assert(rt);
 
@@ -2198,7 +1245,7 @@ struct hdr_ip *ih = HDR_IP(p);
 struct hdr_aodv_error *re = HDR_AODV_ERROR(p);
     
 #ifdef ERROR
-fprintf(stdout, "sending Error from %d at %.2f\n", index, Scheduler::instance().clock());
+fprintf(stderr, "sending Error from %d at %.2f\n", index, Scheduler::instance().clock());
 #endif // DEBUG
 
  re->re_type = AODVTYPE_RERR;
@@ -2242,7 +1289,7 @@ struct hdr_ip *ih = HDR_IP(p);
 struct hdr_aodv_reply *rh = HDR_AODV_REPLY(p);
 
 #ifdef DEBUG
-fprintf(stdout, "sending Hello from %d at %.2f\n", index, Scheduler::instance().clock());
+fprintf(stderr, "sending Hello from %d at %.2f\n", index, Scheduler::instance().clock());
 #endif // DEBUG
 
  rh->rp_type = AODVTYPE_HELLO;
@@ -2354,111 +1401,4 @@ double now = CURRENT_TIME;
    }
  }
 
-}
-//-----------yanhua-----------------0304--
-/*AODV::readRM()
-{}
-*/
-// read etx values
-void 
-AODV::read_orderRM()
-{
-	// read route metric information
-	FILE *fin;
-	//int nbyte;
-	int i;
-	
-	// route metric : etx
-	//if((fin=fopen("min-etx.txt", "r")) == NULL) {
-	if((fin=fopen("Order_M.txt", "r")) == NULL) {
-		printf("route metric file (Order_M.txt) file open error\n");
-		exit(0);
-	}
-	
-	for(i=0;i<nNodes;i++) {
-		fscanf(fin, "%f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n",
-			&etx[i][0], &etx[i][1], &etx[i][2], &etx[i][3], &etx[i][4], &etx[i][5], &etx[i][6], &etx[i][7], &etx[i][8], &etx[i][9], 
-			&etx[i][10], &etx[i][11], &etx[i][12], &etx[i][13], &etx[i][14], &etx[i][15], &etx[i][16], &etx[i][17], &etx[i][18], &etx[i][19], 
-			&etx[i][20], &etx[i][21], &etx[i][22], &etx[i][23], &etx[i][24], &etx[i][25], &etx[i][26], &etx[i][27], &etx[i][28], &etx[i][29], 
-			&etx[i][30], &etx[i][31], &etx[i][32], &etx[i][33], &etx[i][34], &etx[i][35], &etx[i][36], &etx[i][37]);
-	}
-	fclose(fin);
-        #ifdef EXOR_DBG
-        printf ("yanhua : read over.");
-        #endif	
-	//if(i != nNodes)
-	//	printf("nodeId is wrong(i=%d, nNodes=%d)\n", i, nNodes);
-
-}
-
-//-----------yanhua-----------------0304--
-// quick sort
-void 
-AODV::prDstEtx(float num[])
-{
-  int i;
-  for(i=0;i<MAX_FWDER;i++)
-	printf("%.2f \n", num[i]);
-
-  return;
-}
-
-void 
-AODV::prFwList(int num[])
-{
-  int i;
-  for(i=0;i<MAX_FWDER;i++)
-	printf("%d\n", num[i]);
-  
-  return;	
-}
-
-// quick sort
-void 
-AODV::quickSort(float numbers[], int array_size, int idx[])
-{
-  q_sort(numbers, 0, array_size - 1, idx);
-}
-
-
-void 
-AODV::q_sort(float numbers[], int left, int right, int idx[])
-{
-  float pivot;
-  int l_hold, r_hold, pivot_idx;
-  
-  l_hold = left;
-  r_hold = right;
-  pivot = numbers[left];
-  pivot_idx = idx[left];
-  
-  while (left < right)
-  {
-    while ((numbers[right] >= pivot) && (left < right))
-      right--;
-    if (left != right)
-    {
-      numbers[left] = numbers[right];
-      idx[left] = idx[right];
-       left++;
-    }
-    while ((numbers[left] <= pivot) && (left < right))
-      left++;
-    if (left != right)
-    {
-      numbers[right] = numbers[left];
-      idx[right] = idx[left];
-      right--;
-    }
-  }
-  numbers[left] = pivot;
-  idx[left] = pivot_idx;
-  
-  pivot_idx = left;
-  left = l_hold;
-  right = r_hold;
-  if (left < pivot_idx)
-    q_sort(numbers, left, pivot_idx-1, idx);
-  if (right > pivot_idx)
-    q_sort(numbers, pivot_idx+1, right, idx);
 }
