@@ -185,6 +185,11 @@ AODV::AODV(nsaddr_t id) :
 	read_orderRM();
 	//---------------yanhua-0304--------------------
 	//--exor
+
+	xpos = ypos = zpos = 0.0;
+	MobileNode *iNode;
+	iEnergy = 0.0;
+
 }
 
 int AODV::getNextBatchId() {
@@ -1263,7 +1268,7 @@ void AODV::recv(Packet *p, Handler*) {
 	//control pkts, of no interest to exor
 	if (ch->ptype() == PT_AODV) {
 		//ih->ttl_ -= 1;
-		//recvAODV(p);
+		recvAODV(p);
 		drop(p, DROP_RTR_TTL);
 		return;
 	}
@@ -1814,6 +1819,12 @@ void AODV::recvError(Packet *p) {
 void AODV::forward(aodv_rt_entry *rt, Packet *p, double delay) {
 	struct hdr_cmn *ch = HDR_CMN(p);
 	struct hdr_ip *ih = HDR_IP(p);
+
+	/* Code to print Node position and energy */
+	iNode = (MobileNode *) (Node::get_node_by_address(index));
+	xpos = iNode->X();
+	ypos = iNode->Y();
+	printf("At time (%.6f), position of %d is X: %.4f and Y: %.4f\n", CURRENT_TIME, index, xpos, ypos);
 
 	if (ih->ttl_ == 0) {
 

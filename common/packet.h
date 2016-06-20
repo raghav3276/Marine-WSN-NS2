@@ -639,6 +639,21 @@ struct hdr_cmn {
         int opt_num_forwards_;   // optimal #forwards
 	// Monarch extn ends;
 
+        /* Exor packet related fields begin here */
+#define MAX_FWDER 10
+#define MAXBATCH_SIZE 100
+        nsaddr_t sender_addr;
+        int FragNum;
+        int FragSz;
+        int FwdListSize;
+        nsaddr_t F_List[MAX_FWDER];
+        int BatchMap[MAXBATCH_SIZE];
+        int BatchId;
+        int PktNum;
+        int BatchSz;
+        int ForwardernNum;
+        int PayloadLen;
+
 	// tx time for this packet in sec
 	double txtime_;
 	inline double& txtime() { return(txtime_); }

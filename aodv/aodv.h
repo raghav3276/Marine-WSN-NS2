@@ -49,6 +49,8 @@ The AODV code developed by the CMU/MONARCH group was optimized and tuned by Sami
 #include <vector>
 #include <queue>
 
+#include <mobilenode.h>
+
 typedef std::map<nsaddr_t, nsaddr_t> Map;
 typedef std::vector<Packet*> VecP; 
 typedef std::vector<nsaddr_t> VecAddr;
@@ -56,7 +58,8 @@ typedef std::vector<int> VecInt;
 typedef std::queue<Packet*> QueueP;
 typedef std::map<nsaddr_t, int> MapInt;
 
-//#define BATCH_SIZE 10
+#define MAX_FWDER 10
+#define BATCH_SIZE 10
 #define MAXBATCH_SIZE 100
 #define COMPLETION_RATIO 0.9
 #define MAX_BATCH 2
@@ -445,6 +448,12 @@ class AODV: public Agent {
 
 	/* for passing packets up to agents */
 	PortClassifier *dmux_;
+
+	double xpos;
+	double ypos;
+	double zpos;
+	double iEnergy;
+	MobileNode *iNode;
 
 };
 
