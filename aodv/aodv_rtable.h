@@ -103,6 +103,11 @@ class AODV_Neighbor {
         LIST_ENTRY(AODV_Neighbor) nb_link;
         nsaddr_t        nb_addr;
         double          nb_expire;      // ALLOWED_HELLO_LOSS * HELLO_INTERVAL
+
+        /* Marine WSN */
+        double			x_pos;
+        double			y_pos;
+        double			energy;
 };
 
 LIST_HEAD(aodv_ncache, AODV_Neighbor);

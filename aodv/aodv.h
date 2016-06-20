@@ -220,7 +220,6 @@ class BroadcastID {
 
 LIST_HEAD(aodv_bcache, BroadcastID);
 
-
 /*
   The Routing Agent
 */
@@ -321,7 +320,7 @@ class AODV: public Agent {
         /*
          * Neighbor Management
          */
-        void            nb_insert(nsaddr_t id);
+        AODV_Neighbor*       nb_insert(nsaddr_t id);
         AODV_Neighbor*       nb_lookup(nsaddr_t id);
         void            nb_delete(nsaddr_t id);
         void            nb_purge(void);

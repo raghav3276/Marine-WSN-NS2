@@ -188,6 +188,7 @@ AODV::AODV(nsaddr_t id) :
 	//---------------yanhua-0304--------------------
 	//--exor
 
+	/* Marine WSN */
 	xpos = ypos = zpos = 0.0;
 	MobileNode *iNode;
 	iEnergy = 0.0;
@@ -2150,16 +2151,21 @@ void AODV::recvHello(Packet *p) {
 
 	nb = nb_lookup(rp->rp_dst);
 	if (nb == 0) {
-		nb_insert(rp->rp_dst);
+		nb = nb_insert(rp->rp_dst);
 	} else {
 		nb->nb_expire = CURRENT_TIME + (1.5 * ALLOWED_HELLO_LOSS
 				* HELLO_INTERVAL);
 	}
 
+	nb->x_pos = rp->x_pos;
+	nb->y_pos = rp->y_pos;
+	nb->energy = rp->energy;
+
 	Packet::free(p);
 }
 
-void AODV::nb_insert(nsaddr_t id) {
+AODV_Neighbor*
+AODV::nb_insert(nsaddr_t id) {
 	AODV_Neighbor *nb = new AODV_Neighbor(id);
 
 	assert(nb);
@@ -2167,6 +2173,8 @@ void AODV::nb_insert(nsaddr_t id) {
 	LIST_INSERT_HEAD(&nbhead, nb, nb_link);
 	seqno += 2; // set of neighbors changed
 	assert ((seqno%2) == 0);
+
+	return nb;
 }
 
 AODV_Neighbor*
