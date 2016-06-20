@@ -119,6 +119,11 @@ struct hdr_aodv_reply {
 
         double          rp_timestamp;           // when corresponding REQ sent;
 						// used to compute route discovery latency
+
+        /* Fields used for dynamic routing decisions */
+        double 			x_pos;
+        double			y_pos;
+        double			energy;
 						
   inline int size() { 
   int sz = 0;

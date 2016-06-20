@@ -55,6 +55,8 @@ static int route_request = 0;
  TCL Hooks
  */
 
+//#define EXOR_DBG
+
 //--------- exor -- 
 //should be changed according to tcl file
 #define BANDWIDTH 1000000
@@ -100,9 +102,9 @@ int AODV::command(int argc, const char* const * argv) {
 
 		if (strncasecmp(argv[1], "start", 2) == 0) {
 			btimer.handle((Event*) 0);
+			htimer.handle((Event*) 0);
 
 #ifndef AODV_LINK_LAYER_DETECTION
-			htimer.handle((Event*) 0);
 			ntimer.handle((Event*) 0);
 #endif // LINK LAYER DETECTION
 			rtimer.handle((Event*) 0);
@@ -213,11 +215,11 @@ void BroadcastTimer::handle(Event*) {
 }
 
 void HelloTimer::handle(Event*) {
-	/*agent->sendHello();
+	agent->sendHello();
 	 double interval = MinHelloInterval +
 	 ((MaxHelloInterval - MinHelloInterval) * Random::uniform());
 	 assert(interval >= 0);
-	 Scheduler::instance().schedule(this, &intr, interval);*/
+	 Scheduler::instance().schedule(this, &intr, interval);
 }
 
 void NeighborTimer::handle(Event*) {
@@ -1264,6 +1266,15 @@ void AODV::recv(Packet *p, Handler*) {
 	//if(ch->sender_addr == index)//received from itself
 	//   return;
 
+	/* Code to print Node position and energy */
+//	iNode = (MobileNode *) (Node::get_node_by_address(index));
+//	xpos = iNode->X();
+//	ypos = iNode->Y();
+//	iEnergy = iNode->energy_model()->energy();
+//	printf("%s: At time (%.6f), position of %d is X: %.4f and Y: %.4f\n", __func__, CURRENT_TIME, index, xpos, ypos);
+//	printf("%s: At time (%.6f), updated energy of %d is %.4f\n", __func__, CURRENT_TIME, index, iEnergy);
+
+//	printPkt(p);
 
 	//control pkts, of no interest to exor
 	if (ch->ptype() == PT_AODV) {
@@ -1824,7 +1835,7 @@ void AODV::forward(aodv_rt_entry *rt, Packet *p, double delay) {
 	iNode = (MobileNode *) (Node::get_node_by_address(index));
 	xpos = iNode->X();
 	ypos = iNode->Y();
-	printf("At time (%.6f), position of %d is X: %.4f and Y: %.4f\n", CURRENT_TIME, index, xpos, ypos);
+	printf("%s: At time (%.6f), position of %d is X: %.4f and Y: %.4f\n", __func__, CURRENT_TIME, index, xpos, ypos);
 
 	if (ih->ttl_ == 0) {
 
@@ -1880,6 +1891,12 @@ void AODV::sendRequest(nsaddr_t dst) {
 	struct hdr_ip *ih = HDR_IP(p);
 	struct hdr_aodv_request *rq = HDR_AODV_REQUEST(p);
 	aodv_rt_entry *rt = rtable.rt_lookup(dst);
+
+	/* Code to print Node position and energy */
+	iNode = (MobileNode *) (Node::get_node_by_address(index));
+	xpos = iNode->X();
+	ypos = iNode->Y();
+	printf("%s: At time (%.6f), position of %d is X: %.4f and Y: %.4f\n", __func__, CURRENT_TIME, index, xpos, ypos);
 
 	assert(rt);
 
@@ -2000,6 +2017,12 @@ void AODV::sendReply(nsaddr_t ipdst, u_int32_t hop_count, nsaddr_t rpdst,
 	struct hdr_aodv_reply *rp = HDR_AODV_REPLY(p);
 	aodv_rt_entry *rt = rtable.rt_lookup(ipdst);
 
+	/* Code to print Node position and energy */
+	iNode = (MobileNode *) (Node::get_node_by_address(index));
+	xpos = iNode->X();
+	ypos = iNode->Y();
+	printf("%s: At time (%.6f), position of %d is X: %.4f and Y: %.4f\n", __func__, CURRENT_TIME, index, xpos, ypos);
+
 #ifdef DEBUG
 	fprintf(stdout, "sending Reply from %d at %.2f\n", index, Scheduler::instance().clock());
 #endif // DEBUG
@@ -2080,6 +2103,12 @@ void AODV::sendHello() {
 	struct hdr_ip *ih = HDR_IP(p);
 	struct hdr_aodv_reply *rh = HDR_AODV_REPLY(p);
 
+	/* Code to print Node position and energy */
+	iNode = (MobileNode *) (Node::get_node_by_address(index));
+	xpos = iNode->X();
+	ypos = iNode->Y();
+	printf("%s: At time (%.6f), position of %d is X: %.4f and Y: %.4f\n", __func__, CURRENT_TIME, index, xpos, ypos);
+
 #ifdef DEBUG
 	fprintf(stdout, "sending Hello from %d at %.2f\n", index, Scheduler::instance().clock());
 #endif // DEBUG
@@ -2089,6 +2118,9 @@ void AODV::sendHello() {
 	rh->rp_dst = index;
 	rh->rp_dst_seqno = seqno;
 	rh->rp_lifetime = (1 + ALLOWED_HELLO_LOSS) * HELLO_INTERVAL;
+	rh->x_pos = xpos;
+	rh->y_pos = ypos;
+	rh->energy = iNode->energy_model()->energy();
 
 	// ch->uid() = 0;
 	ch->ptype() = PT_AODV;
@@ -2104,13 +2136,17 @@ void AODV::sendHello() {
 	ih->dport() = RT_PORT;
 	ih->ttl_ = 1;
 
+
 	Scheduler::instance().schedule(target_, p, 0.0);
 }
 
 void AODV::recvHello(Packet *p) {
-	//struct hdr_ip *ih = HDR_IP(p);
+	struct hdr_ip *ih = HDR_IP(p);
 	struct hdr_aodv_reply *rp = HDR_AODV_REPLY(p);
 	AODV_Neighbor *nb;
+
+	printf("HELLO packet received by node %d from %d; location: (%.2f, %.2f); energy: %.2f\n",
+			index, ih->saddr(), rp->x_pos, rp->y_pos, rp->energy);
 
 	nb = nb_lookup(rp->rp_dst);
 	if (nb == 0) {
