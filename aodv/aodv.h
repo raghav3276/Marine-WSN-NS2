@@ -64,6 +64,9 @@ typedef std::map<nsaddr_t, int> MapInt;
 #define COMPLETION_RATIO 0.9
 #define MAX_BATCH 2
 #define nNodes 38
+
+#define GATEWAY_X_POS	(double) 300.0
+#define GATEWAY_Y_POS	(double) 400.0
 //---exor
 
 /*
@@ -324,6 +327,8 @@ class AODV: public Agent {
         AODV_Neighbor*       nb_lookup(nsaddr_t id);
         void            nb_delete(nsaddr_t id);
         void            nb_purge(void);
+        void			nb_swap(AODV_Neighbor *nb1, AODV_Neighbor *nb2);
+        void			nb_sort();
 
         /*
          * Broadcast ID Management
@@ -454,6 +459,7 @@ class AODV: public Agent {
 	double iEnergy;
 	MobileNode *iNode;
 
+	double 				dist_xy(double x1, double y1, double x2, double y2);
 };
 
 #endif /* __aodv_h__ */

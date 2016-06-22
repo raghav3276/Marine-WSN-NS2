@@ -192,7 +192,6 @@ AODV::AODV(nsaddr_t id) :
 	xpos = ypos = zpos = 0.0;
 	MobileNode *iNode;
 	iEnergy = 0.0;
-
 }
 
 int AODV::getNextBatchId() {
@@ -1004,76 +1003,17 @@ double AODV::computeBackOffTime(Packet *pkt) {
 }
 
 void AODV::constructForwarderList(Packet *p) {
+	int i;
 	struct hdr_cmn *ch = HDR_CMN(p);
 	struct hdr_ip *ih = HDR_IP(p);
-	int i, j, dst_i;
-	float Cur_order, tmp_order;
-	float dstEtx[MAX_FWDER];
-	int fwList[MAX_FWDER];
-	int dst, src;
+	AODV_Neighbor *nb = nbhead.lh_first;
 
-	dst = (int) ih->daddr();
-	//MAX_FWDER
 	ch->FwdListSize = MAX_FWDER; //4;
 	ch->ForwardernNum = MAX_FWDER - 1; //3;//last one = source
-	//--------------------------yanhua--0304---
-	src = index;
-	dst_i = 0;
-	for (i = 1; i < MAX_FWDER; i++) {
-		dstEtx[i] = -1;
-		fwList[i] = -1;
+
+	for (i = 0; nb && i < MAX_FWDER; i++, nb = nb->nb_link.le_next) {
+		ch->F_List[i] = nb->nb_addr;
 	}
-	// sort all nodes according to the etx values for the destination
-	for (i = 0; i < MAX_FWDER; i++) {
-		Cur_order = etx[src][dst];
-		tmp_order = Cur_order - 4 + i;
-		if (tmp_order < 0) {
-			continue;
-		}
-		dst_i++;
-		for (j = 1; j < nNodes; j++) {
-			if (tmp_order == etx[j][dst]) {
-				dstEtx[dst_i] = etx[j][dst];
-				fwList[dst_i] = j;
-				break;
-			}
-		}
-#ifdef EXOR_DBG
-		if (j==nNodes) {
-			printf("yanhua : no suiable forwarder to the destination!!");
-		}
-#endif
-	}
-
-	//  printf("before sort... \n");
-	//  prDstEtx(dstEtx);
-	//  prFwList(fwList);
-
-	//  quickSort(dstEtx, MAX_FWDER, fwList);
-
-	//  printf("after sort... \n");
-	//  prDstEtx(dstEtx);
-	//  prFwList(fwList);
-
-	//--------------------------yanhua--0304---
-	for (i = 0; i < MAX_FWDER; i++) {
-		ch->F_List[i] = fwList[i];
-		//ch->F_List[i] = MAX_FWDER-1-i;
-	}
-
-	//ch->F_List[(int)ih->daddr()] = ch->F_List[0];
-	//ch->F_List[0] = ih->daddr();//highest priority
-	//ch->F_List[(int)index] = ch->F_List[37];
-	//ch->F_List[37] = index;//lowest priority
-
-	//ch->F_List[0] = 3;//highest priority
-	//ch->F_List[1] = 2;
-	//ch->F_List[2] = 1;
-	//ch->F_List[3] = 0; //lowest
-
-#ifdef EXOR_DBG
-	//    fprintf(stdout, "%s:  done !!!\n", __FUNCTION__);
-#endif // DEBUG
 }
 
 //this function should called only by source node when receiving a pkt from upper layer
@@ -1836,7 +1776,7 @@ void AODV::forward(aodv_rt_entry *rt, Packet *p, double delay) {
 	iNode = (MobileNode *) (Node::get_node_by_address(index));
 	xpos = iNode->X();
 	ypos = iNode->Y();
-	printf("%s: At time (%.6f), position of %d is X: %.4f and Y: %.4f\n", __func__, CURRENT_TIME, index, xpos, ypos);
+//	printf("%s: At time (%.6f), position of %d is X: %.4f and Y: %.4f\n", __func__, CURRENT_TIME, index, xpos, ypos);
 
 	if (ih->ttl_ == 0) {
 
@@ -2108,7 +2048,7 @@ void AODV::sendHello() {
 	iNode = (MobileNode *) (Node::get_node_by_address(index));
 	xpos = iNode->X();
 	ypos = iNode->Y();
-	printf("%s: At time (%.6f), position of %d is X: %.4f and Y: %.4f\n", __func__, CURRENT_TIME, index, xpos, ypos);
+//	printf("%s: At time (%.6f), position of %d is X: %.4f and Y: %.4f\n", __func__, CURRENT_TIME, index, xpos, ypos);
 
 #ifdef DEBUG
 	fprintf(stdout, "sending Hello from %d at %.2f\n", index, Scheduler::instance().clock());
@@ -2141,10 +2081,25 @@ void AODV::sendHello() {
 	Scheduler::instance().schedule(target_, p, 0.0);
 }
 
+double AODV::dist_xy(double x1, double y1, double x2, double y2)
+{
+	double a = x1 - x2;
+	double b = y1 - y2;
+
+	return sqrt(a * a + b * b);
+}
+
 void AODV::recvHello(Packet *p) {
 	struct hdr_ip *ih = HDR_IP(p);
 	struct hdr_aodv_reply *rp = HDR_AODV_REPLY(p);
 	AODV_Neighbor *nb;
+	double this_node_dist_to_dest, nb_dist_to_dest, dist_factor;
+
+	nb_dist_to_dest = dist_xy(rp->x_pos, rp->y_pos, GATEWAY_X_POS, GATEWAY_Y_POS);
+	this_node_dist_to_dest = dist_xy(xpos, ypos, GATEWAY_X_POS, GATEWAY_Y_POS);
+	dist_factor = this_node_dist_to_dest - nb_dist_to_dest;
+	if (dist_factor < 0.0)
+		goto drop_pkt;
 
 	printf("HELLO packet received by node %d from %d; location: (%.2f, %.2f); energy: %.2f\n",
 			index, ih->saddr(), rp->x_pos, rp->y_pos, rp->energy);
@@ -2161,7 +2116,60 @@ void AODV::recvHello(Packet *p) {
 	nb->y_pos = rp->y_pos;
 	nb->energy = rp->energy;
 
+	nb->dist_to_dest = nb_dist_to_dest;
+	nb->dist_factor = dist_factor;
+
+	nb_sort();
+
+	for (nb = nbhead.lh_first; nb; nb = nb->nb_link.le_next) {
+		printf("node: %d; dist: %.2f; dist_factor: %.2f\n", nb->nb_addr, nb->dist_to_dest, nb->dist_factor);
+	}
+
+drop_pkt:
 	Packet::free(p);
+}
+
+/* Arranges the neighbors in the priority order wrt distance. Forwarder's list can be
+ * easily obtained by reading the first required elements */
+void AODV::nb_sort()
+{
+	AODV_Neighbor *nb1 = nbhead.lh_first;
+	AODV_Neighbor *nb2;
+
+	for (; nb1; nb1 = nb1->nb_link.le_next) {
+		for (nb2 = nb1->nb_link.le_next; nb2; nb2 = nb2->nb_link.le_next) {
+			if (nb1->dist_factor > nb2->dist_factor)
+				nb_swap(nb1, nb2);
+		}
+	}
+}
+
+void AODV::nb_swap(AODV_Neighbor *nb1, AODV_Neighbor *nb2)
+{
+	AODV_Neighbor nb_temp(nb1->nb_addr);
+
+	nb_temp.nb_expire = nb1->nb_expire;
+	nb_temp.x_pos = nb1->x_pos;
+	nb_temp.y_pos = nb1->y_pos;
+	nb_temp.dist_to_dest = nb1->dist_to_dest;
+	nb_temp.dist_factor = nb1->dist_factor;
+	nb_temp.energy = nb1->energy;
+
+	nb1->nb_addr = nb2->nb_addr;
+	nb1->nb_expire = nb2->nb_expire;
+	nb1->x_pos = nb2->x_pos;
+	nb1->y_pos = nb2->y_pos;
+	nb1->dist_to_dest = nb2->dist_to_dest;
+	nb1->dist_factor = nb2->dist_factor;
+	nb1->energy = nb2->energy;
+
+	nb2->nb_addr = nb_temp.nb_addr;
+	nb2->nb_expire = nb_temp.nb_expire;
+	nb2->x_pos = nb_temp.x_pos;
+	nb2->y_pos = nb_temp.y_pos;
+	nb2->dist_to_dest = nb_temp.dist_to_dest;
+	nb2->dist_factor = nb_temp.dist_factor;
+	nb2->energy = nb_temp.energy;
 }
 
 AODV_Neighbor*

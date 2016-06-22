@@ -107,6 +107,8 @@ class AODV_Neighbor {
         /* Marine WSN */
         double			x_pos;
         double			y_pos;
+        double			dist_to_dest;
+        double 			dist_factor;
         double			energy;
 };
 
