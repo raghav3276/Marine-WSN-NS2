@@ -87,8 +87,17 @@ class Network{
 
 //------------ exor
 
+class AODV_Nb_dist_fact_history {
+	friend class AODV;
+	friend class aodv_rt_entry;
+	friend class AODV_Neighbor;
 
+protected:
+	LIST_ENTRY(AODV_Nb_dist_fact_history) dist_fact_link;
+	double dist_factor;
+};
 
+LIST_HEAD(dist_fact_history, AODV_Nb_dist_fact_history);
 
 /*
    AODV Neighbor Cache Entry
@@ -97,7 +106,10 @@ class AODV_Neighbor {
         friend class AODV;
         friend class aodv_rt_entry;
  public:
-        AODV_Neighbor(u_int32_t a) { nb_addr = a; }
+        AODV_Neighbor(u_int32_t a) {
+        	nb_addr = a;
+        	LIST_INIT(&nb_history_head);
+        }
 
  protected:
         LIST_ENTRY(AODV_Neighbor) nb_link;
@@ -105,11 +117,15 @@ class AODV_Neighbor {
         double          nb_expire;      // ALLOWED_HELLO_LOSS * HELLO_INTERVAL
 
         /* Marine WSN */
+        double			energy;
         double			x_pos;
         double			y_pos;
         double			dist_to_dest;
-        double 			dist_factor;
-        double			energy;
+
+#define MAX_NB_HISTORY_SIZE		5
+        int				curr_history_size;
+        dist_fact_history nb_history_head;
+        double			next_dist_factor_prediction;	//Calculated based on moving average
 };
 
 LIST_HEAD(aodv_ncache, AODV_Neighbor);

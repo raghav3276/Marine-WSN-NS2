@@ -1201,6 +1201,7 @@ AODV::copyPacket(Packet* op) {
 void AODV::recv(Packet *p, Handler*) {
 	struct hdr_cmn *ch = HDR_CMN(p);
 	struct hdr_ip *ih = HDR_IP(p);
+	double sum_dist_fact_history = 0.0;
 
 	assert(initialized());
 
@@ -1224,6 +1225,17 @@ void AODV::recv(Packet *p, Handler*) {
 		drop(p, DROP_RTR_TTL);
 		return;
 	}
+
+	/* Calculate the dist factor prediction for all the nodes */
+	for (AODV_Neighbor *nb = nbhead.lh_first; nb; nb = nb->nb_link.le_next) {
+		for (AODV_Nb_dist_fact_history *nh_temp = nb->nb_history_head.lh_first; nh_temp; nh_temp = nh_temp->dist_fact_link.le_next)
+			sum_dist_fact_history += nh_temp->dist_factor;
+
+		nb->next_dist_factor_prediction = sum_dist_fact_history / nb->curr_history_size;
+	}
+
+	/* Sort the neighbors as per the predicted dist factor so as to prepare the forwarder's list */
+	nb_sort();
 
 #ifdef EXOR_DBG
 	fprintf(stdout, "----------------- %s:  start recv of pkt in node %d  from node %d at time %f!!! ----------------------------\n",
@@ -1251,6 +1263,7 @@ void AODV::recv(Packet *p, Handler*) {
 #endif // DEBUG
 
 		ch->PktNum = getNextPktNum();
+		printf("index: %d; pktnum: %d\n", index, ch->PktNum);
 
 		// choi
 		// send only one batch
@@ -1295,6 +1308,8 @@ void AODV::recv(Packet *p, Handler*) {
 		//estimateDataRate(p);
 		//computeBackOffTime(p);
 		if (isBatchReady()) {
+			printf("index: %d, batch ready!\n", index);
+			pktNum = -1;
 			//schedule transmission immediately
 			//transmitAllFragments();
 #ifdef EXOR_DBG
@@ -1309,6 +1324,8 @@ void AODV::recv(Packet *p, Handler*) {
 
 		return; // no need for anything else
 	}
+
+	printf("index: %d; forwarder received the packet\n", index);
 
 	//forwarder receives this packet- comments by yanhua
 	//handle general initialization
@@ -1776,7 +1793,7 @@ void AODV::forward(aodv_rt_entry *rt, Packet *p, double delay) {
 	iNode = (MobileNode *) (Node::get_node_by_address(index));
 	xpos = iNode->X();
 	ypos = iNode->Y();
-//	printf("%s: At time (%.6f), position of %d is X: %.4f and Y: %.4f\n", __func__, CURRENT_TIME, index, xpos, ypos);
+	printf("%s: At time (%.6f), position of %d is X: %.4f and Y: %.4f\n", __func__, CURRENT_TIME, index, xpos, ypos);
 
 	if (ih->ttl_ == 0) {
 
@@ -2089,7 +2106,33 @@ double AODV::dist_xy(double x1, double y1, double x2, double y2)
 	return sqrt(a * a + b * b);
 }
 
+void AODV::manage_nb_history(AODV_Neighbor *nb, double dist_factor)
+{
+//	double sum_dist_fact_history = 0.0;
+	AODV_Nb_dist_fact_history *nh = new AODV_Nb_dist_fact_history();
+
+	nh->dist_factor = dist_factor;
+	LIST_INSERT_HEAD(&nb->nb_history_head, nh, dist_fact_link);
+	nb->curr_history_size++;
+
+	/* Remove the oldest distance factor record from the history if the capacity is reached */
+	if (nb->curr_history_size >= MAX_NB_HISTORY_SIZE) {
+		AODV_Nb_dist_fact_history *nh_temp = nb->nb_history_head.lh_first;
+
+		for (; nh_temp->dist_fact_link.le_next; nh_temp = nh_temp->dist_fact_link.le_next);
+		LIST_REMOVE(nh_temp, dist_fact_link);
+		nb->curr_history_size--;
+	}
+
+	/* TODO: Move the prediction logic to the part where data packet is received */
+//	for (AODV_Nb_dist_fact_history *nh_temp = nb->nb_history_head.lh_first; nh_temp; nh_temp = nh_temp->dist_fact_link.le_next)
+//		sum_dist_fact_history += nh_temp->dist_factor;
+//
+//	nb->next_dist_factor_prediction = sum_dist_fact_history / nb->curr_history_size;
+}
+
 void AODV::recvHello(Packet *p) {
+	int j = 0;
 	struct hdr_ip *ih = HDR_IP(p);
 	struct hdr_aodv_reply *rp = HDR_AODV_REPLY(p);
 	AODV_Neighbor *nb;
@@ -2101,8 +2144,8 @@ void AODV::recvHello(Packet *p) {
 	if (dist_factor < 0.0)
 		goto drop_pkt;
 
-	printf("HELLO packet received by node %d from %d; location: (%.2f, %.2f); energy: %.2f\n",
-			index, ih->saddr(), rp->x_pos, rp->y_pos, rp->energy);
+//	printf("HELLO packet received by node %d from %d; location: (%.2f, %.2f); energy: %.2f\n",
+//			index, ih->saddr(), rp->x_pos, rp->y_pos, rp->energy);
 
 	nb = nb_lookup(rp->rp_dst);
 	if (nb == 0) {
@@ -2117,13 +2160,19 @@ void AODV::recvHello(Packet *p) {
 	nb->energy = rp->energy;
 
 	nb->dist_to_dest = nb_dist_to_dest;
-	nb->dist_factor = dist_factor;
 
-	nb_sort();
+	manage_nb_history(nb, dist_factor);
 
-	for (nb = nbhead.lh_first; nb; nb = nb->nb_link.le_next) {
-		printf("node: %d; dist: %.2f; dist_factor: %.2f\n", nb->nb_addr, nb->dist_to_dest, nb->dist_factor);
-	}
+//	printf("=========================\n");
+//	for (AODV_Nb_dist_fact_history *nh = nb->nb_history_head.lh_first; nh; nh = nh->dist_fact_link.le_next, j++) {
+//		printf("node: %d nb_node: %d; dist_fact[%d]: %.2f; prediction: %.2f\n",
+//				index, nb->nb_addr, j, nh->dist_factor, nb->next_dist_factor_prediction);
+//	}
+//	printf("=========================\n");
+
+//	for (nb = nbhead.lh_first; nb; nb = nb->nb_link.le_next) {
+//		printf("node: %d; dist: %.2f; dist_factor: %.2f\n", nb->nb_addr, nb->dist_to_dest, nb->dist_factor);
+//	}
 
 drop_pkt:
 	Packet::free(p);
@@ -2138,7 +2187,7 @@ void AODV::nb_sort()
 
 	for (; nb1; nb1 = nb1->nb_link.le_next) {
 		for (nb2 = nb1->nb_link.le_next; nb2; nb2 = nb2->nb_link.le_next) {
-			if (nb1->dist_factor > nb2->dist_factor)
+			if (nb1->next_dist_factor_prediction > nb2->next_dist_factor_prediction)
 				nb_swap(nb1, nb2);
 		}
 	}
@@ -2152,7 +2201,7 @@ void AODV::nb_swap(AODV_Neighbor *nb1, AODV_Neighbor *nb2)
 	nb_temp.x_pos = nb1->x_pos;
 	nb_temp.y_pos = nb1->y_pos;
 	nb_temp.dist_to_dest = nb1->dist_to_dest;
-	nb_temp.dist_factor = nb1->dist_factor;
+	nb_temp.nb_history_head = nb1->nb_history_head;
 	nb_temp.energy = nb1->energy;
 
 	nb1->nb_addr = nb2->nb_addr;
@@ -2160,7 +2209,7 @@ void AODV::nb_swap(AODV_Neighbor *nb1, AODV_Neighbor *nb2)
 	nb1->x_pos = nb2->x_pos;
 	nb1->y_pos = nb2->y_pos;
 	nb1->dist_to_dest = nb2->dist_to_dest;
-	nb1->dist_factor = nb2->dist_factor;
+	nb1->nb_history_head = nb2->nb_history_head;
 	nb1->energy = nb2->energy;
 
 	nb2->nb_addr = nb_temp.nb_addr;
@@ -2168,7 +2217,7 @@ void AODV::nb_swap(AODV_Neighbor *nb1, AODV_Neighbor *nb2)
 	nb2->x_pos = nb_temp.x_pos;
 	nb2->y_pos = nb_temp.y_pos;
 	nb2->dist_to_dest = nb_temp.dist_to_dest;
-	nb2->dist_factor = nb_temp.dist_factor;
+	nb2->nb_history_head = nb_temp.nb_history_head;
 	nb2->energy = nb_temp.energy;
 }
 
@@ -2209,14 +2258,23 @@ void AODV::nb_delete(nsaddr_t id) {
 
 	for (; nb; nb = nb->nb_link.le_next) {
 		if (nb->nb_addr == id) {
+			AODV_Nb_dist_fact_history *nh = nb->nb_history_head.lh_first;
+			AODV_Nb_dist_fact_history *nh2 = nh;
+
+			for (; nh2; nh = nh2) {
+				nh2 = nh->dist_fact_link.le_next;
+				LIST_REMOVE(nh, dist_fact_link);
+				delete nh;
+			}
+
 			LIST_REMOVE(nb,nb_link);
 			delete nb;
+
 			break;
 		}
 	}
 
 	handle_link_failure(id);
-
 }
 
 /*

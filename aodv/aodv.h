@@ -460,6 +460,7 @@ class AODV: public Agent {
 	MobileNode *iNode;
 
 	double 				dist_xy(double x1, double y1, double x2, double y2);
+	void 				manage_nb_history(AODV_Neighbor *nb, double dist_factor);
 };
 
 #endif /* __aodv_h__ */
