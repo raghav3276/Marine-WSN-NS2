@@ -212,9 +212,9 @@ struct ap_table {
 	double ap_power;
 };
 
-struct priority_queue {
+struct mac_priority_queue {
 	int frame_priority;
-	struct priority_queue *next;
+	struct mac_priority_queue *next;
 };
 /* ======================================================================
    Definitions
@@ -554,7 +554,7 @@ private:
  	double		dataRate_;
 	struct client_table	*client_list;	
 	struct ap_table	*ap_list;
-	struct priority_queue *queue_head;
+	struct mac_priority_queue *queue_head;
 
 	/*
 	 * Mac Timers

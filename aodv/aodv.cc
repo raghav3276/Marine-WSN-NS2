@@ -141,7 +141,17 @@ int AODV::command(int argc, const char* const * argv) {
 				return TCL_ERROR;
 			}
 			return TCL_OK;
+		} else if (strcmp (argv [1], "access-mac") == 0) {
+			mac = (Mac802_11mr *) TclObject:: lookup (argv [2]);
+			if (mac == 0) {
+				fprintf (stderr, "Agent: %s lookup %s failed. \ n", argv [1], argv[2]);
+				return TCL_ERROR;
+			} else {
+				printf ("This node's mac bss_id: %d \ n", mac-> bss_id ());
+				return TCL_OK;
+			}
 		}
+
 	}
 	return Agent::command(argc, argv);
 }
@@ -1263,7 +1273,7 @@ void AODV::recv(Packet *p, Handler*) {
 #endif // DEBUG
 
 		ch->PktNum = getNextPktNum();
-		printf("index: %d; pktnum: %d\n", index, ch->PktNum);
+//		printf("index: %d; pktnum: %d\n", index, ch->PktNum);
 
 		// choi
 		// send only one batch
@@ -1308,7 +1318,7 @@ void AODV::recv(Packet *p, Handler*) {
 		//estimateDataRate(p);
 		//computeBackOffTime(p);
 		if (isBatchReady()) {
-			printf("index: %d, batch ready!\n", index);
+//			printf("index: %d, batch ready!\n", index);
 			pktNum = -1;
 			//schedule transmission immediately
 			//transmitAllFragments();
@@ -1325,7 +1335,7 @@ void AODV::recv(Packet *p, Handler*) {
 		return; // no need for anything else
 	}
 
-	printf("index: %d; forwarder received the packet\n", index);
+//	printf("index: %d; forwarder received the packet\n", index);
 
 	//forwarder receives this packet- comments by yanhua
 	//handle general initialization
@@ -2162,6 +2172,7 @@ void AODV::recvHello(Packet *p) {
 	nb->dist_to_dest = nb_dist_to_dest;
 
 	manage_nb_history(nb, dist_factor);
+	printf("PER for index: %d is %.2f\n", index, mac->getPer(index));
 
 //	printf("=========================\n");
 //	for (AODV_Nb_dist_fact_history *nh = nb->nb_history_head.lh_first; nh; nh = nh->dist_fact_link.le_next, j++) {
