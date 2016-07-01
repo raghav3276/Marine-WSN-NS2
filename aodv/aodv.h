@@ -50,8 +50,7 @@ The AODV code developed by the CMU/MONARCH group was optimized and tuned by Sami
 #include <queue>
 
 #include <mobilenode.h>
-
-#include <dei80211mr-1.1.4/mac-802_11mr.h>
+#include <mac-802_11mr.h>
 
 typedef std::map<nsaddr_t, nsaddr_t> Map;
 typedef std::vector<Packet*> VecP; 
@@ -67,8 +66,8 @@ typedef std::map<nsaddr_t, int> MapInt;
 #define MAX_BATCH 2
 #define nNodes 38
 
-#define GATEWAY_X_POS	(double) 300.0
-#define GATEWAY_Y_POS	(double) 400.0
+#define GATEWAY_X_POS	(double) 1000.0
+#define GATEWAY_Y_POS	(double) 1000.0
 //---exor
 
 /*
@@ -465,6 +464,8 @@ class AODV: public Agent {
 	void 				manage_nb_history(AODV_Neighbor *nb, double dist_factor);
 
 	Mac802_11mr *mac;
+
+	double 				getPER(Packet *p);
 };
 
 #endif /* __aodv_h__ */

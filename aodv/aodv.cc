@@ -2172,7 +2172,8 @@ void AODV::recvHello(Packet *p) {
 	nb->dist_to_dest = nb_dist_to_dest;
 
 	manage_nb_history(nb, dist_factor);
-	printf("PER for index: %d is %.2f\n", index, mac->getPer(index));
+	nb->per = mac->getPer(p);
+	printf("PER for index: %d wrt node %d is %.2f\n", index, nb->nb_addr, nb->per);
 
 //	printf("=========================\n");
 //	for (AODV_Nb_dist_fact_history *nh = nb->nb_history_head.lh_first; nh; nh = nh->dist_fact_link.le_next, j++) {
@@ -2198,7 +2199,7 @@ void AODV::nb_sort()
 
 	for (; nb1; nb1 = nb1->nb_link.le_next) {
 		for (nb2 = nb1->nb_link.le_next; nb2; nb2 = nb2->nb_link.le_next) {
-			if (nb1->next_dist_factor_prediction > nb2->next_dist_factor_prediction)
+			if (nb1->next_dist_factor_prediction * (1 - nb1->per) < nb2->next_dist_factor_prediction * (1 - nb2->per))
 				nb_swap(nb1, nb2);
 		}
 	}

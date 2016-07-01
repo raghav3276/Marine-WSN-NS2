@@ -126,6 +126,7 @@ class AODV_Neighbor {
         int				curr_history_size;
         dist_fact_history nb_history_head;
         double			next_dist_factor_prediction;	//Calculated based on moving average
+        double			per;
 };
 
 LIST_HEAD(aodv_ncache, AODV_Neighbor);
