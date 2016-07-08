@@ -42,9 +42,6 @@
 //#define DEBUG
 //#define ERROR
 
-//#define EXOR_DBG
-
-
 #ifdef DEBUG
 static int extra_route_reply = 0;
 static int limit_route_request = 0;
@@ -57,7 +54,7 @@ static int route_request = 0;
 
 //#define EXOR_DBG
 
-//--------- exor -- 
+//--------- exor --
 //should be changed according to tcl file
 #define BANDWIDTH 1000000
 #define MAC_HDR  80	// 52
@@ -68,7 +65,6 @@ static int route_request = 0;
 #define ONE_PKT_TIME ((double)(PAY_LOAD+IP_HDR+MAC_HDR)/(double) (BANDWIDTH/8))
 //the measured time from ns-2 is around 0.003 sec / packet
 //--------- exor
-
 
 int hdr_aodv::offset_;
 static class AODVHeaderClass: public PacketHeaderClass {
@@ -136,22 +132,22 @@ int AODV::command(int argc, const char* const * argv) {
 		} else if (strcmp(argv[1], "port-dmux") == 0) {
 			dmux_ = (PortClassifier *) TclObject::lookup(argv[2]);
 			if (dmux_ == 0) {
-				fprintf(stdout, "%s: %s lookup of %s failed\n", __FILE__,
+				fprintf(stderr, "%s: %s lookup of %s failed\n", __FILE__,
 						argv[1], argv[2]);
 				return TCL_ERROR;
 			}
 			return TCL_OK;
-		} else if (strcmp (argv [1], "access-mac") == 0) {
-			mac = (Mac802_11mr *) TclObject:: lookup (argv [2]);
+		} else if (strcmp(argv[1], "access-mac") == 0) {
+			mac = (Mac802_11mr *) TclObject::lookup(argv[2]);
 			if (mac == 0) {
-				fprintf (stderr, "Agent: %s lookup %s failed. \ n", argv [1], argv[2]);
+				fprintf(stderr, "Agent: %s lookup %s failed. \ n", argv[1],
+						argv[2]);
 				return TCL_ERROR;
 			} else {
-				printf ("This node's mac bss_id: %d \ n", mac-> bss_id ());
+				printf("This node's mac bss_id: %d \ n", mac-> bss_id());
 				return TCL_OK;
 			}
 		}
-
 	}
 	return Agent::command(argc, argv);
 }
@@ -161,8 +157,8 @@ int AODV::command(int argc, const char* const * argv) {
  */
 
 AODV::AODV(nsaddr_t id) :
-	Agent(PT_AODV), fTimer(this), btimer(this), htimer(this), ntimer(this),
-			rtimer(this), lrtimer(this), rqueue() {
+	Agent(PT_AODV), fTimer(this), btimer(this), htimer(this), ntimer(this), rtimer(this),
+			lrtimer(this), rqueue() {
 
 	index = id;
 	seqno = 2;
@@ -179,7 +175,7 @@ AODV::AODV(nsaddr_t id) :
 	lastReceivedTime = -1.;
 	curRate = -1.;
 	localBatchMap[0] = -1; //indicating it is not init-ed yet for the new batch
-	BatchId = -1;// indicating ready for new batch and 
+	BatchId = -1;// indicating ready for new batch and
 
 	nextBatchId = -1;
 	pktNum = -1;
@@ -191,12 +187,8 @@ AODV::AODV(nsaddr_t id) :
 	//init local packet buffer
 	for (int i = 0; i < BATCH_SIZE; i++)
 		packetBuffer[i] = false;
+
 	ackReady = false;
-	//---------------yanhua-0304--------------------
-	// readRM();
-	read_orderRM();
-	//---------------yanhua-0304--------------------
-	//--exor
 
 	/* Marine WSN */
 	xpos = ypos = zpos = 0.0;
@@ -218,39 +210,38 @@ int AODV::getNextPktNum() {
  Timers
  */
 
+/* TODO: Originally the following timer functions are commented in the EXOR code.
+ * Check if this makes a difference in reception.
+ */
+
 void BroadcastTimer::handle(Event*) {
-	/*agent->id_purge();
-	 Scheduler::instance().schedule(this, &intr, BCAST_ID_SAVE);
-	 */
+	agent->id_purge();
+	Scheduler::instance().schedule(this, &intr, BCAST_ID_SAVE);
 }
 
 void HelloTimer::handle(Event*) {
 	agent->sendHello();
-	 double interval = MinHelloInterval +
-	 ((MaxHelloInterval - MinHelloInterval) * Random::uniform());
-	 assert(interval >= 0);
-	 Scheduler::instance().schedule(this, &intr, interval);
+	double interval = MinHelloInterval + ((MaxHelloInterval - MinHelloInterval)
+			* Random::uniform());
+	assert(interval >= 0);
+	Scheduler::instance().schedule(this, &intr, interval);
 }
 
 void NeighborTimer::handle(Event*) {
-	/*
-	 agent->nb_purge();
-	 Scheduler::instance().schedule(this, &intr, HELLO_INTERVAL);
-	 */
+	agent->nb_purge();
+	Scheduler::instance().schedule(this, &intr, HELLO_INTERVAL);
 }
 
 void RouteCacheTimer::handle(Event*) {
-	/*
-	 agent->rt_purge();
-	 #define FREQUENCY 0.5 // sec
-	 Scheduler::instance().schedule(this, &intr, FREQUENCY);
-	 */
+	agent->rt_purge();
+#define FREQUENCY 0.5 // sec
+	Scheduler::instance().schedule(this, &intr, FREQUENCY);
 }
 
 //---exor
 void ForwardingTimer::expire(Event* e) {
 	//first send all fragments
-	//fprintf(stdout,"Node %d  ------ Timer fires at %f ---- \n",agent->index, CURRENT_TIME);
+	//	printf("Node %d  ------ Timer fires at %f ---- \n",agent->index, CURRENT_TIME);
 	agent->transmitAllFragments();
 	//reschedule the timer
 	//Scheduler::instance().schedule(this, &intr, MAX_WAIT*ONE_PKT_TIME);
@@ -259,12 +250,13 @@ void ForwardingTimer::expire(Event* e) {
 }
 //--- exor
 
+
 void LocalRepairTimer::handle(Event* p) { // SRD: 5/4/99
 	aodv_rt_entry *rt;
 	struct hdr_ip *ih = HDR_IP( (Packet *)p);
 
 	/* you get here after the timeout in a local repair attempt */
-	/*	fprintf(stdout, "%s\n", __FUNCTION__); */
+	/*	fprintf(stderr, "%s\n", __FUNCTION__); */
 
 	rt = agent->rtable.rt_lookup(ih->daddr());
 
@@ -279,7 +271,7 @@ void LocalRepairTimer::handle(Event* p) { // SRD: 5/4/99
 		agent->rt_down(rt);
 		// send RERR
 #ifdef DEBUG
-		fprintf(stdout,"Node %d: Dst - %d, failed local repair\n",index, rt->rt_dst);
+		fprintf(stderr,"Dst - %d, failed local repair\n", rt->rt_dst);
 #endif      
 	}
 	Packet::free((Packet *) p);
@@ -421,7 +413,7 @@ void AODV::handle_link_failure(nsaddr_t id) {
 			re->unreachable_dst[re->DestCount] = rt->rt_dst;
 			re->unreachable_dst_seqno[re->DestCount] = rt->rt_seqno;
 #ifdef DEBUG
-			fprintf(stdout, "%s(%f): %d\t(%d\t%u\t%d)\n", __FUNCTION__, CURRENT_TIME,
+			fprintf(stderr, "%s(%f): %d\t(%d\t%u\t%d)\n", __FUNCTION__, CURRENT_TIME,
 					index, re->unreachable_dst[re->DestCount],
 					re->unreachable_dst_seqno[re->DestCount], rt->rt_nexthop);
 #endif // DEBUG
@@ -434,7 +426,7 @@ void AODV::handle_link_failure(nsaddr_t id) {
 
 	if (re->DestCount > 0) {
 #ifdef DEBUG
-		fprintf(stdout, "%s(%f): %d\tsending RERR...\n", __FUNCTION__, CURRENT_TIME, index);
+		fprintf(stderr, "%s(%f): %d\tsending RERR...\n", __FUNCTION__, CURRENT_TIME, index);
 #endif // DEBUG
 		sendError(rerr, false);
 	} else {
@@ -444,7 +436,7 @@ void AODV::handle_link_failure(nsaddr_t id) {
 
 void AODV::local_rt_repair(aodv_rt_entry *rt, Packet *p) {
 #ifdef DEBUG
-	fprintf(stdout,"%s: Dst - %d\n", __FUNCTION__, rt->rt_dst);
+	fprintf(stderr,"%s: Dst - %d\n", __FUNCTION__, rt->rt_dst);
 #endif  
 	// Buffer the packet
 	rqueue.enque(p);
@@ -547,7 +539,7 @@ void AODV::rt_resolve(Packet *p) {
 		re->unreachable_dst_seqno[re->DestCount] = rt->rt_seqno;
 		re->DestCount += 1;
 #ifdef DEBUG
-		fprintf(stdout, "%s: sending RERR...\n", __FUNCTION__);
+		fprintf(stderr, "%s: sending RERR...\n", __FUNCTION__);
 #endif
 		sendError(rerr, false);
 
@@ -570,7 +562,7 @@ void AODV::rt_purge() {
 			assert(rt->rt_hops != INFINITY2);
 			while ((p = rqueue.deque(rt->rt_dst))) {
 #ifdef DEBUG
-				fprintf(stdout, "%s: calling drop()\n",
+				fprintf(stderr, "%s: calling drop()\n",
 						__FUNCTION__);
 #endif // DEBUG
 				drop(p, DROP_RTR_NO_ROUTE);
@@ -617,7 +609,7 @@ double AODV::estimateDataRate(Packet * p) {
 
 #ifdef EXOR_DBG
 	//fprintf(stdout, "%s: cur time = %f\n", __FUNCTION__, curTime);
-#endif 
+#endif
 
 	struct hdr_cmn *ch = HDR_CMN(p);
 	if (curNode != ch->sender_addr) //new sending node, restart estimation process
@@ -643,7 +635,7 @@ double AODV::estimateDataRate(Packet * p) {
 		double rate = (double) numPktLeft / (double) (curTime
 				- lastReceivedTime);
 
-		//fprintf(stdout, "%s:  numPktLeft, curTime-lastReceivedTime = %d:%f !!!\n", 
+		//fprintf(stdout, "%s:  numPktLeft, curTime-lastReceivedTime = %d:%f !!!\n",
 		// __FUNCTION__, numPktLeft, curTime-lastReceivedTime);
 
 
@@ -812,7 +804,7 @@ void AODV::updateLocalPacketBuffer(Packet *p) {
 bool AODV::curBatchCompleted() {
 #ifdef EXOR_DBG
 	// fprintf(stdout, "%s:  done !!!\n", __FUNCTION__);
-#endif // DEBUG  
+#endif // DEBUG
 	int count = 0;
 	int thisP = getPriority(index); //this node's priority
 	for (int i = 0; i < BATCH_SIZE; i++) {
@@ -822,7 +814,7 @@ bool AODV::curBatchCompleted() {
 
 #ifdef EXOR_DBG
 	//fprintf(stdout, "%s:  done !!!\n", __FUNCTION__);
-#endif // DEBUG  
+#endif // DEBUG
 	return ((count / BATCH_SIZE) >= COMPLETION_RATIO);
 }
 
@@ -957,7 +949,7 @@ double AODV::computeBackOffTime(Packet *pkt) {
 	struct hdr_cmn *ch = HDR_CMN(pkt);
 	VecAddr::iterator it;
 	if (localForwarderList.size() == 0) //non-inited yet, localforwarderlist should be cleared when a new batch is in effect
-	{//save a local copy	
+	{//save a local copy
 
 		for (int i = 0; i < ch->FwdListSize; i++) //it is acutally an array
 		{
@@ -1050,7 +1042,7 @@ void AODV::transmitAllFragments() {
 		for (int i = 0; i < ACK_SIZE; i++) {
 #ifdef EXOR_DBG
 			fprintf(stdout, "%s:  sending ack %d  !!!\n", __FUNCTION__, i);
-#endif // DEBUG   
+#endif // DEBUG
 			p = preparePacket(0, i, ACK_SIZE);
 			// ghost = copyPacket(p); //make a copy for scheduler to destroy
 			ghost = p->copy();
@@ -1067,7 +1059,7 @@ void AODV::transmitAllFragments() {
 			idx_pk_num = nextPktNum;
 #ifdef EXOR_DBG
 			fprintf(stdout, "%s:  sending data Pkt %d  (frag num = %d) !!!\n", __FUNCTION__, idx_pk_num, i);
-#endif // DEBUG  
+#endif // DEBUG
 			if (idx_pk_num < 0) {
 				fprintf(
 						stdout,
@@ -1086,7 +1078,7 @@ void AODV::transmitAllFragments() {
 
 #ifdef EXOR_DBG
 	fprintf(stdout, "%s:  done !!!\n", __FUNCTION__);
-#endif // DEBUG                                                                               
+#endif // DEBUG
 }
 
 /*
@@ -1115,7 +1107,7 @@ void AODV::transmitAllFragments() {
  else{//non-dest node
  int idx_pk_num;
  int fSize = getFragmentSize();
- 
+
  for(int i = 0; i<fSize;i++){
 
  idx_pk_num = nextPktNum;
@@ -1204,6 +1196,7 @@ AODV::copyPacket(Packet* op) {
 
 //--------------exor
 
+
 /*
  Packet Reception Routines
  */
@@ -1214,74 +1207,65 @@ void AODV::recv(Packet *p, Handler*) {
 	double sum_dist_fact_history = 0.0;
 
 	assert(initialized());
+	//assert(p->incoming == 0);
+	// XXXXX NOTE: use of incoming flag has been depracated; In order to track direction of pkt flow, direction_ in hdr_cmn is used instead. see packet.h for details.
 
-	//if(ch->sender_addr == index)//received from itself
-	//   return;
-
-	/* Code to print Node position and energy */
-//	iNode = (MobileNode *) (Node::get_node_by_address(index));
-//	xpos = iNode->X();
-//	ypos = iNode->Y();
-//	iEnergy = iNode->energy_model()->energy();
-//	printf("%s: At time (%.6f), position of %d is X: %.4f and Y: %.4f\n", __func__, CURRENT_TIME, index, xpos, ypos);
-//	printf("%s: At time (%.6f), updated energy of %d is %.4f\n", __func__, CURRENT_TIME, index, iEnergy);
-
-//	printPkt(p);
-
-	//control pkts, of no interest to exor
 	if (ch->ptype() == PT_AODV) {
-		//ih->ttl_ -= 1;
+		ih->ttl_ -= 1;
 		recvAODV(p);
-		drop(p, DROP_RTR_TTL);
 		return;
 	}
 
+	/* Pkt has to be forwarded or initiate the pkt transmission from src */
+
 	/* Calculate the dist factor prediction for all the nodes */
 	for (AODV_Neighbor *nb = nbhead.lh_first; nb; nb = nb->nb_link.le_next) {
-		for (AODV_Nb_dist_fact_history *nh_temp = nb->nb_history_head.lh_first; nh_temp; nh_temp = nh_temp->dist_fact_link.le_next)
+		for (AODV_Nb_dist_fact_history *nh_temp = nb->nb_history_head.lh_first; nh_temp; nh_temp
+				= nh_temp->dist_fact_link.le_next)
 			sum_dist_fact_history += nh_temp->dist_factor;
 
-		nb->next_dist_factor_prediction = sum_dist_fact_history / nb->curr_history_size;
+		nb->next_dist_factor_prediction = sum_dist_fact_history
+				/ nb->curr_history_size;
 	}
 
 	/* Sort the neighbors as per the predicted dist factor so as to prepare the forwarder's list */
 	nb_sort();
 
-#ifdef EXOR_DBG
-	fprintf(stdout, "----------------- %s:  start recv of pkt in node %d  from node %d at time %f!!! ----------------------------\n",
-			__FUNCTION__, index, ch->sender_addr, CURRENT_TIME);
-	fprintf(stdout, "----------------- %s:  ch->FragNum, ch->FragSz, ch->PktNum = %d:%d:%d\n", __FUNCTION__,ch->FragNum, ch->FragSz, ch->PktNum );
-#endif // DEBUG   
-
-	//---exor---------------------------------------------
-
-	//a data pkt originated from upper layer (only at source node)
+	/*
+	 *  Must be a packet I'm originating...
+	 */
 	if ((ih->saddr() == index) && (ch->num_forwards() == 0)) {
-		//fprintf(stdout, "%s: should e here only once !!!!!!!!!!!!!!! %d \n", __FUNCTION__,ch->BatchId );
-		//Add the IP Header
-		ch->size() += IP_HDR_LEN;
-		//we don't need to use ttl anymore ???
-		ih->ttl_ = NETWORK_DIAMETER;
+		/*
+		 * Add the IP Header.
+		 * TCP adds the IP header too, so to avoid setting it twice, we check if
+		 * this packet is not a TCP or ACK segment.
+		 */
+		if (ch->ptype() != PT_TCP && ch->ptype() != PT_ACK) {
+			ch->size() += IP_HDR_LEN;
+		}
+		// Added by Parag Dadhania && John Novatnack to handle broadcasting
+		if ((u_int32_t) ih->daddr() != IP_BROADCAST) {
+			ih->ttl_ = NETWORK_DIAMETER;
+		}
 
-		//set up all the header fields by GOD
-		//we should set batch Id if the current batch id is not set yet
 		if (BatchId < 0)
 			ch->BatchId = getNextBatchId();
 
 #ifdef EXOR_DBG
 		fprintf(stdout, "%s: new BatchId = %d \n", __FUNCTION__,ch->BatchId );
 #endif // DEBUG
-
 		ch->PktNum = getNextPktNum();
 //		printf("index: %d; pktnum: %d\n", index, ch->PktNum);
 
 		// choi
 		// send only one batch
-		if (ch->PktNum >= BATCH_SIZE) {
-			drop(p, DROP_RTR_QFULL);//Modified by yanhua
+		/* The following code is commented as it wasn't allowing the
+		 * packet reception all the way to the application layer */
+//		if (ch->PktNum >= BATCH_SIZE) {
+//			drop(p, DROP_RTR_QFULL);//Modified by yanhua
 			//   	Packet::free (p);      //Modified by yanhua
-			return;
-		}
+//			return;
+//		}
 
 #ifdef EXOR_DBG
 		fprintf(stdout, "%s: new PktNum = %d \n", __FUNCTION__,ch->PktNum );
@@ -1310,13 +1294,13 @@ void AODV::recv(Packet *p, Handler*) {
 		//now update the local pkt buffer and batch map
 		updateLocalBatchMap(p);
 		updateLocalPacketBuffer(p);
-		Packet::free(p);
+//		Packet::free(p);
 
 		//printf("after free at the source...\n");
 
 		//estimate data rate (for init) and compute backoff time, no need for source
-		//estimateDataRate(p);
-		//computeBackOffTime(p);
+		estimateDataRate(p);
+		computeBackOffTime(p);
 		if (isBatchReady()) {
 //			printf("index: %d, batch ready!\n", index);
 			pktNum = -1;
@@ -1331,105 +1315,85 @@ void AODV::recv(Packet *p, Handler*) {
 #ifdef EXOR_DBG
 		//fprintf(stdout, "%s: iam here before return  \n", __FUNCTION__);
 #endif // DEBUG
+//		return; // no need for anything else
 
-		return; // no need for anything else
 	}
-
-//	printf("index: %d; forwarder received the packet\n", index);
-
-	//forwarder receives this packet- comments by yanhua
-	//handle general initialization
-	if (localForwarderList.size() == 0) //non-inited yet, localforwarderlist should be cleared when a new batch is in effect
-	{//save a local copy	
-		//int j=0;
+//
+//	//forwarder receives this packet- comments by yanhua
+//	//handle general initialization
+//	//non-inited yet, localforwarderlist should be cleared when a new batch is in effect
+//	//save a local copy
+	else if (localForwarderList.size() == 0) {
+//
+//		printf("index: %d; forwarder received the packet\n", index);
+//
 		for (int i = 0; i < ch->FwdListSize; i++) //it is acutally an array
 		{
 			localForwarderList.push_back(ch->F_List[i]);
 			localForwarderMap.insert(std::make_pair(ch->F_List[i], i));
-			//j++;
 		}
 
-	}
+#ifdef EXOR_DBG
+		fprintf(stdout, "%s:  before geneic handling!!!\n", __FUNCTION__);
+#endif // DEBUG
+		//--- now a generic data pkt (received from neighbors (already inited)) for all nodes, including source and dest
+		//always update the local pkt buffer and batch map
+		updateLocalBatchMap(p);
+
+		updateLocalPacketBuffer(p);
+
+		/*
+		 #ifdef EXOR_DBG
+		 fprintf(stdout, "  --- current local batch map on node %d ----\n", index);
+		 for(int j=0;j<BATCH_SIZE;j++)
+		 fprintf(stdout, "%s:  batchmap for pktNums %d  = %d !!!\n", __FUNCTION__, j,localBatchMap[j]);
+		 //for(int ii= 0;ii<ch->FwdListSize;ii++)
+		 //fprintf(stdout, "%s:  priority for node %d  = %d !!!\n", __FUNCTION__, ii, getPriority(ii));
+		 #endif // DEBUG
+		 */
+
+		//estimate data rate (for init) and compute backoff time, no need for source
+		estimateDataRate(p);
+		double waitTime = computeBackOffTime(p);
 
 #ifdef EXOR_DBG
-	fprintf(stdout, "%s:  before geneic handling!!!\n", __FUNCTION__);
+		// yanhua DBG
+		fprintf(stdout, "%s:Hi, yanhua.Node %d ,  new waiting time = %f !!!\n", __FUNCTION__,index,waitTime);//DBG by yanhua.
 #endif // DEBUG
+		//reset the Forwarder Timer
+		resetForwardingTimer(waitTime);//the right one
+		//resetForwardingTimer(0.01 * Random::uniform());
+		//resetForwardingTimer(0.);
 
-	//--- now a generic data pkt (received from neighbors (already inited)) for all nodes, including source and dest
-	//always update the local pkt buffer and batch map
-	updateLocalBatchMap(p);
-
-	updateLocalPacketBuffer(p);
-
+		//------------------------------------------------------------
+	}
 	/*
-	 #ifdef EXOR_DBG
-	 fprintf(stdout, "  --- current local batch map on node %d ----\n", index);
-	 for(int j=0;j<BATCH_SIZE;j++)
-	 fprintf(stdout, "%s:  batchmap for pktNums %d  = %d !!!\n", __FUNCTION__, j,localBatchMap[j]);
-	 //for(int ii= 0;ii<ch->FwdListSize;ii++)
-	 //fprintf(stdout, "%s:  priority for node %d  = %d !!!\n", __FUNCTION__, ii, getPriority(ii));
-	 #endif // DEBUG
+	 *  I received a packet that I sent.  Probably
+	 *  a routing loop.
 	 */
-
-	//estimate data rate (for init) and compute backoff time, no need for source
-	estimateDataRate(p);
-	double waitTime = computeBackOffTime(p);
-
-#ifdef EXOR_DBG
-	// yanhua DBG
-	fprintf(stdout, "%s:Hi, yanhua.Node %d ,  new waiting time = %f !!!\n", __FUNCTION__,index,waitTime);//DBG by yanhua.
-#endif // DEBUG
-	//reset the Forwarder Timer
-	resetForwardingTimer(waitTime);//the right one
-	//resetForwardingTimer(0.01 * Random::uniform());
-	//resetForwardingTimer(0.);
-
-	//------------------------------------------------------------
-
-	//if it is a data pkt destined for this node, deliver to upper layer
-	/* if (ch->PayloadLen > 0 && ch->ptype() != PT_AODV && ch->direction() == hdr_cmn::UP &&
-	 ((u_int32_t)ih->daddr() == IP_BROADCAST)
-	 || (ih->daddr() == here_.addr_)) {
-	 */
-
-	//if it is a data pkt destined for this node, deliver to upper layer
-	FILE *OUTDATA;
-	if ((OUTDATA = fopen("deliPkt.dat", "a")) == NULL) {
-		printf("deliPkt.dat file open error\n");
+	else if (ih->saddr() == index) {
+		drop(p, DROP_RTR_ROUTE_LOOP);
+		return;
 	}
+	/*
+	 *  Packet I'm forwarding...
+	 */
+	else {
+		/*
+		 *  Check the TTL.  If it is zero, then discard.
+		 */
+		if (--ih->ttl_ == 0) {
+			drop(p, DROP_RTR_TTL);
+			return;
+		}
+	}
+	// Added by Parag Dadhania && John Novatnack to handle broadcasting
+	if ((u_int32_t) ih->daddr() != IP_BROADCAST)
+		rt_resolve(p);
+	else
+		forward((aodv_rt_entry*) 0, p, NO_DELAY);
 
-	//   if (ch->PayloadLen > 0 && ih->daddr() == here_.addr_){
-
-	//dmux_->recv(p,0);
-	//fprintf(stdout, "%s:  pkt %d delivered to dest %d !!!\n", __FUNCTION__, ch->PktNum, index);
-	fprintf(OUTDATA,
-			"%.9f pkt seq %d from %d received -> by dst node %d !!!\n",
-			CURRENT_TIME, ch->PktNum, ch->sender_addr, index);
-
-	fclose(OUTDATA);
-	Packet::free(p); //print and free this pkt- comments by yanhua.
-	return;
-	//}
-	//---exor-------------------------------------------------------------------------------------------------------
-
-	fclose(OUTDATA);
-#ifdef EXOR_DBG
-	// yanhua DBG
-	fprintf(stdout, "%s:Hi, yanhua. I should not be here, i am not a regular pkt !!!\n", __FUNCTION__);//DBG by yanhua.
-#endif // DEBUG
-	Packet::free(p);
-}
-
-void AODV::printPkt(Packet *p) {
-	struct hdr_cmn *ch = HDR_CMN(p);
-	fprintf(stdout, "----- pkt printout start---- \n");
-	fprintf(stdout, "ch->PktNum %d,  ch->FragNum %d,ch->FragSz %d \n",
-			ch->PktNum, ch->FragNum, ch->FragSz);
-
-	//ch->ForwardernNum = cho->ForwardernNum;
-	fprintf(stdout, " F_LIST[1]= %d, BatchMap[1] = %d  ", ch->F_List[1],
-			ch->BatchMap[1]);
-	fprintf(stdout, "----- pkt printout end ---- \n");
+//	Packet::free(p);
 }
 
 void AODV::recvAODV(Packet *p) {
@@ -1460,7 +1424,7 @@ void AODV::recvAODV(Packet *p) {
 		break;
 
 	default:
-		fprintf(stdout, "Invalid AODV type (%x)\n", ah->ah_type);
+		fprintf(stderr, "Invalid AODV type (%x)\n", ah->ah_type);
 		exit(1);
 	}
 
@@ -1479,7 +1443,7 @@ void AODV::recvRequest(Packet *p) {
 
 	if (rq->rq_src == index) {
 #ifdef DEBUG
-		fprintf(stdout, "%s: got my own REQUEST\n", __FUNCTION__);
+		fprintf(stderr, "%s: got my own REQUEST\n", __FUNCTION__);
 #endif // DEBUG
 		Packet::free(p);
 		return;
@@ -1488,7 +1452,7 @@ void AODV::recvRequest(Packet *p) {
 	if (id_lookup(rq->rq_src, rq->rq_bcast_id)) {
 
 #ifdef DEBUG
-		fprintf(stdout, "%s: discarding request\n", __FUNCTION__);
+		fprintf(stderr, "%s: discarding request\n", __FUNCTION__);
 #endif // DEBUG
 		Packet::free(p);
 		return;
@@ -1558,10 +1522,9 @@ void AODV::recvRequest(Packet *p) {
 	if (rq->rq_dst == index) {
 
 #ifdef DEBUG
-		fprintf(stdout, "%d - %s: destination sending reply\n",
+		fprintf(stderr, "%d - %s: destination sending reply\n",
 				index, __FUNCTION__);
 #endif // DEBUG
-
 		// Just to be safe, I use the max. Somebody may have
 		// incremented the dst seqno.
 		seqno = max(seqno, rq->rq_dst_seqno) + 1;
@@ -1636,9 +1599,8 @@ void AODV::recvReply(Packet *p) {
 	double delay = 0.0;
 
 #ifdef DEBUG
-	fprintf(stdout, "%d - %s: received a REPLY\n", index, __FUNCTION__);
+	fprintf(stderr, "%d - %s: received a REPLY\n", index, __FUNCTION__);
 #endif // DEBUG
-
 	/*
 	 *  Got a reply. So reset the "soft state" maintained for
 	 *  route requests in the request table. We don't really have
@@ -1730,7 +1692,7 @@ void AODV::recvReply(Packet *p) {
 		} else {
 			// I don't know how to forward .. drop the reply.
 #ifdef DEBUG
-			fprintf(stdout, "%s: dropping Route Reply\n", __FUNCTION__);
+			fprintf(stderr, "%s: dropping Route Reply\n", __FUNCTION__);
 #endif // DEBUG
 			drop(p, DROP_RTR_NO_ROUTE);
 		}
@@ -1755,7 +1717,7 @@ void AODV::recvError(Packet *p) {
 			assert(rt->rt_flags == RTF_UP);
 			assert((rt->rt_seqno%2) == 0); // is the seqno even?
 #ifdef DEBUG
-			fprintf(stdout, "%s(%f): %d\t(%d\t%u\t%d)\t(%d\t%u\t%d)\n", __FUNCTION__,CURRENT_TIME,
+			fprintf(stderr, "%s(%f): %d\t(%d\t%u\t%d)\t(%d\t%u\t%d)\n", __FUNCTION__,CURRENT_TIME,
 					index, rt->rt_dst, rt->rt_seqno, rt->rt_nexthop,
 					re->unreachable_dst[i],re->unreachable_dst_seqno[i],
 					ih->saddr());
@@ -1781,7 +1743,7 @@ void AODV::recvError(Packet *p) {
 
 	if (nre->DestCount > 0) {
 #ifdef DEBUG
-		fprintf(stdout, "%s(%f): %d\t sending RERR...\n", __FUNCTION__, CURRENT_TIME, index);
+		fprintf(stderr, "%s(%f): %d\t sending RERR...\n", __FUNCTION__, CURRENT_TIME, index);
 #endif // DEBUG
 		sendError(rerr);
 	} else {
@@ -1799,23 +1761,17 @@ void AODV::forward(aodv_rt_entry *rt, Packet *p, double delay) {
 	struct hdr_cmn *ch = HDR_CMN(p);
 	struct hdr_ip *ih = HDR_IP(p);
 
-	/* Code to print Node position and energy */
-	iNode = (MobileNode *) (Node::get_node_by_address(index));
-	xpos = iNode->X();
-	ypos = iNode->Y();
-	printf("%s: At time (%.6f), position of %d is X: %.4f and Y: %.4f\n", __func__, CURRENT_TIME, index, xpos, ypos);
-
 	if (ih->ttl_ == 0) {
 
 #ifdef DEBUG
-		fprintf(stdout, "%s: calling drop()\n", __PRETTY_FUNCTION__);
+		fprintf(stderr, "%s: calling drop()\n", __PRETTY_FUNCTION__);
 #endif // DEBUG
 		drop(p, DROP_RTR_TTL);
 		return;
 	}
 
-	if (ch->ptype() != PT_AODV && ch->direction() == hdr_cmn::UP
-			&& ((u_int32_t) ih->daddr() == IP_BROADCAST) || (ih->daddr()
+	if (((ch->ptype() != PT_AODV && ch->direction() == hdr_cmn::UP)
+			&& ((u_int32_t) ih->daddr() == IP_BROADCAST)) || (ih->daddr()
 			== here_.addr_)) {
 		dmux_->recv(p, 0);
 		return;
@@ -1837,10 +1793,14 @@ void AODV::forward(aodv_rt_entry *rt, Packet *p, double delay) {
 	if (ih->daddr() == (nsaddr_t) IP_BROADCAST) {
 		// If it is a broadcast packet
 		assert(rt == 0);
-		/*
-		 *  Jitter the sending of broadcast packets by 10ms
-		 */
-		Scheduler::instance().schedule(target_, p, 0.01 * Random::uniform());
+		if (ch->ptype() == PT_AODV) {
+			/*
+			 *  Jitter the sending of AODV broadcast packets by 10ms
+			 */
+			Scheduler::instance().schedule(target_, p, 0.01 * Random::uniform());
+		} else {
+			Scheduler::instance().schedule(target_, p, 0.); // No jitter
+		}
 	} else { // Not a broadcast packet
 		if (delay > 0.0) {
 			Scheduler::instance().schedule(target_, p, delay);
@@ -1859,12 +1819,6 @@ void AODV::sendRequest(nsaddr_t dst) {
 	struct hdr_ip *ih = HDR_IP(p);
 	struct hdr_aodv_request *rq = HDR_AODV_REQUEST(p);
 	aodv_rt_entry *rt = rtable.rt_lookup(dst);
-
-	/* Code to print Node position and energy */
-	iNode = (MobileNode *) (Node::get_node_by_address(index));
-	xpos = iNode->X();
-	ypos = iNode->Y();
-	printf("%s: At time (%.6f), position of %d is X: %.4f and Y: %.4f\n", __func__, CURRENT_TIME, index, xpos, ypos);
 
 	assert(rt);
 
@@ -1900,7 +1854,7 @@ void AODV::sendRequest(nsaddr_t dst) {
 	}
 
 #ifdef DEBUG
-	fprintf(stdout, "(%2d) - %2d sending Route Request, dst: %d\n",
+	fprintf(stderr, "(%2d) - %2d sending Route Request, dst: %d\n",
 			++route_request, index, rt->rt_dst);
 #endif // DEBUG
 	// Determine the TTL to be used this time.
@@ -1941,12 +1895,11 @@ void AODV::sendRequest(nsaddr_t dst) {
 	rt->rt_expire = 0;
 
 #ifdef DEBUG
-	fprintf(stdout, "(%2d) - %2d sending Route Request, dst: %d, tout %f ms\n",
+	fprintf(stderr, "(%2d) - %2d sending Route Request, dst: %d, tout %f ms\n",
 			++route_request,
 			index, rt->rt_dst,
 			rt->rt_req_timeout - CURRENT_TIME);
 #endif	// DEBUG
-
 	// Fill out the RREQ packet
 	// ch->uid() = 0;
 	ch->ptype() = PT_AODV;
@@ -1985,14 +1938,8 @@ void AODV::sendReply(nsaddr_t ipdst, u_int32_t hop_count, nsaddr_t rpdst,
 	struct hdr_aodv_reply *rp = HDR_AODV_REPLY(p);
 	aodv_rt_entry *rt = rtable.rt_lookup(ipdst);
 
-	/* Code to print Node position and energy */
-	iNode = (MobileNode *) (Node::get_node_by_address(index));
-	xpos = iNode->X();
-	ypos = iNode->Y();
-	printf("%s: At time (%.6f), position of %d is X: %.4f and Y: %.4f\n", __func__, CURRENT_TIME, index, xpos, ypos);
-
 #ifdef DEBUG
-	fprintf(stdout, "sending Reply from %d at %.2f\n", index, Scheduler::instance().clock());
+	fprintf(stderr, "sending Reply from %d at %.2f\n", index, Scheduler::instance().clock());
 #endif // DEBUG
 	assert(rt);
 
@@ -2031,7 +1978,7 @@ void AODV::sendError(Packet *p, bool jitter) {
 	struct hdr_aodv_error *re = HDR_AODV_ERROR(p);
 
 #ifdef ERROR
-	fprintf(stdout, "sending Error from %d at %.2f\n", index, Scheduler::instance().clock());
+	fprintf(stderr, "sending Error from %d at %.2f\n", index, Scheduler::instance().clock());
 #endif // DEBUG
 	re->re_type = AODVTYPE_RERR;
 	//re->reserved[0] = 0x00; re->reserved[1] = 0x00;
@@ -2071,14 +2018,8 @@ void AODV::sendHello() {
 	struct hdr_ip *ih = HDR_IP(p);
 	struct hdr_aodv_reply *rh = HDR_AODV_REPLY(p);
 
-	/* Code to print Node position and energy */
-	iNode = (MobileNode *) (Node::get_node_by_address(index));
-	xpos = iNode->X();
-	ypos = iNode->Y();
-//	printf("%s: At time (%.6f), position of %d is X: %.4f and Y: %.4f\n", __func__, CURRENT_TIME, index, xpos, ypos);
-
 #ifdef DEBUG
-	fprintf(stdout, "sending Hello from %d at %.2f\n", index, Scheduler::instance().clock());
+	fprintf(stderr, "sending Hello from %d at %.2f\n", index, Scheduler::instance().clock());
 #endif // DEBUG
 	rh->rp_type = AODVTYPE_HELLO;
 	//rh->rp_flags = 0x00;
@@ -2086,9 +2027,6 @@ void AODV::sendHello() {
 	rh->rp_dst = index;
 	rh->rp_dst_seqno = seqno;
 	rh->rp_lifetime = (1 + ALLOWED_HELLO_LOSS) * HELLO_INTERVAL;
-	rh->x_pos = xpos;
-	rh->y_pos = ypos;
-	rh->energy = iNode->energy_model()->energy();
 
 	// ch->uid() = 0;
 	ch->ptype() = PT_AODV;
@@ -2104,21 +2042,18 @@ void AODV::sendHello() {
 	ih->dport() = RT_PORT;
 	ih->ttl_ = 1;
 
-
 	Scheduler::instance().schedule(target_, p, 0.0);
 }
 
-double AODV::dist_xy(double x1, double y1, double x2, double y2)
-{
+double AODV::dist_xy(double x1, double y1, double x2, double y2) {
 	double a = x1 - x2;
 	double b = y1 - y2;
 
 	return sqrt(a * a + b * b);
 }
 
-void AODV::manage_nb_history(AODV_Neighbor *nb, double dist_factor)
-{
-//	double sum_dist_fact_history = 0.0;
+void AODV::manage_nb_history(AODV_Neighbor *nb, double dist_factor) {
+	//	double sum_dist_fact_history = 0.0;
 	AODV_Nb_dist_fact_history *nh = new AODV_Nb_dist_fact_history();
 
 	nh->dist_factor = dist_factor;
@@ -2129,16 +2064,12 @@ void AODV::manage_nb_history(AODV_Neighbor *nb, double dist_factor)
 	if (nb->curr_history_size >= MAX_NB_HISTORY_SIZE) {
 		AODV_Nb_dist_fact_history *nh_temp = nb->nb_history_head.lh_first;
 
-		for (; nh_temp->dist_fact_link.le_next; nh_temp = nh_temp->dist_fact_link.le_next);
+		for (;nh_temp->dist_fact_link.le_next;
+				nh_temp = nh_temp->dist_fact_link.le_next);
+
 		LIST_REMOVE(nh_temp, dist_fact_link);
 		nb->curr_history_size--;
 	}
-
-	/* TODO: Move the prediction logic to the part where data packet is received */
-//	for (AODV_Nb_dist_fact_history *nh_temp = nb->nb_history_head.lh_first; nh_temp; nh_temp = nh_temp->dist_fact_link.le_next)
-//		sum_dist_fact_history += nh_temp->dist_factor;
-//
-//	nb->next_dist_factor_prediction = sum_dist_fact_history / nb->curr_history_size;
 }
 
 void AODV::recvHello(Packet *p) {
@@ -2148,14 +2079,15 @@ void AODV::recvHello(Packet *p) {
 	AODV_Neighbor *nb;
 	double this_node_dist_to_dest, nb_dist_to_dest, dist_factor;
 
-	nb_dist_to_dest = dist_xy(rp->x_pos, rp->y_pos, GATEWAY_X_POS, GATEWAY_Y_POS);
+	nb_dist_to_dest = dist_xy(rp->x_pos, rp->y_pos, GATEWAY_X_POS,
+			GATEWAY_Y_POS);
 	this_node_dist_to_dest = dist_xy(xpos, ypos, GATEWAY_X_POS, GATEWAY_Y_POS);
 	dist_factor = this_node_dist_to_dest - nb_dist_to_dest;
 	if (dist_factor < 0.0)
 		goto drop_pkt;
 
-//	printf("HELLO packet received by node %d from %d; location: (%.2f, %.2f); energy: %.2f\n",
-//			index, ih->saddr(), rp->x_pos, rp->y_pos, rp->energy);
+	//	printf("HELLO packet received by node %d from %d; location: (%.2f, %.2f); energy: %.2f\n",
+	//			index, ih->saddr(), rp->x_pos, rp->y_pos, rp->energy);
 
 	nb = nb_lookup(rp->rp_dst);
 	if (nb == 0) {
@@ -2173,40 +2105,38 @@ void AODV::recvHello(Packet *p) {
 
 	manage_nb_history(nb, dist_factor);
 	nb->per = mac->getPer(p);
-	printf("PER for index: %d wrt node %d is %.2f\n", index, nb->nb_addr, nb->per);
+	//	printf("PER for index: %d wrt node %d is %.2f\n", index, nb->nb_addr, nb->per);
 
-//	printf("=========================\n");
-//	for (AODV_Nb_dist_fact_history *nh = nb->nb_history_head.lh_first; nh; nh = nh->dist_fact_link.le_next, j++) {
-//		printf("node: %d nb_node: %d; dist_fact[%d]: %.2f; prediction: %.2f\n",
-//				index, nb->nb_addr, j, nh->dist_factor, nb->next_dist_factor_prediction);
-//	}
-//	printf("=========================\n");
+	//	printf("=========================\n");
+	//	for (AODV_Nb_dist_fact_history *nh = nb->nb_history_head.lh_first; nh; nh = nh->dist_fact_link.le_next, j++) {
+	//		printf("node: %d nb_node: %d; dist_fact[%d]: %.2f; prediction: %.2f\n",
+	//				index, nb->nb_addr, j, nh->dist_factor, nb->next_dist_factor_prediction);
+	//	}
+	//	printf("=========================\n");
 
-//	for (nb = nbhead.lh_first; nb; nb = nb->nb_link.le_next) {
-//		printf("node: %d; dist: %.2f; dist_factor: %.2f\n", nb->nb_addr, nb->dist_to_dest, nb->dist_factor);
-//	}
+	//	for (nb = nbhead.lh_first; nb; nb = nb->nb_link.le_next) {
+	//		printf("node: %d; dist: %.2f; dist_factor: %.2f\n", nb->nb_addr, nb->dist_to_dest, nb->dist_factor);
+	//	}
 
-drop_pkt:
-	Packet::free(p);
+	drop_pkt: Packet::free(p);
 }
 
 /* Arranges the neighbors in the priority order wrt distance. Forwarder's list can be
  * easily obtained by reading the first required elements */
-void AODV::nb_sort()
-{
+void AODV::nb_sort() {
 	AODV_Neighbor *nb1 = nbhead.lh_first;
 	AODV_Neighbor *nb2;
 
 	for (; nb1; nb1 = nb1->nb_link.le_next) {
 		for (nb2 = nb1->nb_link.le_next; nb2; nb2 = nb2->nb_link.le_next) {
-			if (nb1->next_dist_factor_prediction * (1 - nb1->per) < nb2->next_dist_factor_prediction * (1 - nb2->per))
+			if (nb1->next_dist_factor_prediction * (1 - nb1->per)
+					< nb2->next_dist_factor_prediction * (1 - nb2->per))
 				nb_swap(nb1, nb2);
 		}
 	}
 }
 
-void AODV::nb_swap(AODV_Neighbor *nb1, AODV_Neighbor *nb2)
-{
+void AODV::nb_swap(AODV_Neighbor *nb1, AODV_Neighbor *nb2) {
 	AODV_Neighbor nb_temp(nb1->nb_addr);
 
 	nb_temp.nb_expire = nb1->nb_expire;
@@ -2215,6 +2145,9 @@ void AODV::nb_swap(AODV_Neighbor *nb1, AODV_Neighbor *nb2)
 	nb_temp.dist_to_dest = nb1->dist_to_dest;
 	nb_temp.nb_history_head = nb1->nb_history_head;
 	nb_temp.energy = nb1->energy;
+	nb_temp.per = nb1->per;
+	nb_temp.curr_history_size = nb1->curr_history_size;
+	nb_temp.next_dist_factor_prediction = nb1->next_dist_factor_prediction;
 
 	nb1->nb_addr = nb2->nb_addr;
 	nb1->nb_expire = nb2->nb_expire;
@@ -2223,6 +2156,9 @@ void AODV::nb_swap(AODV_Neighbor *nb1, AODV_Neighbor *nb2)
 	nb1->dist_to_dest = nb2->dist_to_dest;
 	nb1->nb_history_head = nb2->nb_history_head;
 	nb1->energy = nb2->energy;
+	nb1->per = nb2->per;
+	nb1->curr_history_size = nb2->curr_history_size;
+	nb1->next_dist_factor_prediction = nb1->next_dist_factor_prediction;
 
 	nb2->nb_addr = nb_temp.nb_addr;
 	nb2->nb_expire = nb_temp.nb_expire;
@@ -2231,10 +2167,12 @@ void AODV::nb_swap(AODV_Neighbor *nb1, AODV_Neighbor *nb2)
 	nb2->dist_to_dest = nb_temp.dist_to_dest;
 	nb2->nb_history_head = nb_temp.nb_history_head;
 	nb2->energy = nb_temp.energy;
+	nb2->per = nb_temp.per;
+	nb2->curr_history_size = nb_temp.curr_history_size;
+	nb2->next_dist_factor_prediction = nb_temp.next_dist_factor_prediction;
 }
 
-AODV_Neighbor*
-AODV::nb_insert(nsaddr_t id) {
+AODV_Neighbor* AODV::nb_insert(nsaddr_t id) {
 	AODV_Neighbor *nb = new AODV_Neighbor(id);
 
 	assert(nb);
@@ -2287,6 +2225,7 @@ void AODV::nb_delete(nsaddr_t id) {
 	}
 
 	handle_link_failure(id);
+
 }
 
 /*
@@ -2305,104 +2244,4 @@ void AODV::nb_purge() {
 		}
 	}
 
-}
-//-----------yanhua-----------------0304--
-/*AODV::readRM()
- {}
- */
-// read etx values
-void AODV::read_orderRM() {
-	// read route metric information
-	FILE *fin;
-	//int nbyte;
-	int i;
-
-	// route metric : etx
-	//if((fin=fopen("min-etx.txt", "r")) == NULL) {
-	if ((fin = fopen("Order_M.txt", "r")) == NULL) {
-		printf("route metric file (Order_M.txt) file open error\n");
-		exit(0);
-	}
-
-	for (i = 0; i < nNodes; i++) {
-		fscanf(
-				fin,
-				"%f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f %f\n",
-				&etx[i][0], &etx[i][1], &etx[i][2], &etx[i][3], &etx[i][4],
-				&etx[i][5], &etx[i][6], &etx[i][7], &etx[i][8], &etx[i][9],
-				&etx[i][10], &etx[i][11], &etx[i][12], &etx[i][13],
-				&etx[i][14], &etx[i][15], &etx[i][16], &etx[i][17],
-				&etx[i][18], &etx[i][19], &etx[i][20], &etx[i][21],
-				&etx[i][22], &etx[i][23], &etx[i][24], &etx[i][25],
-				&etx[i][26], &etx[i][27], &etx[i][28], &etx[i][29],
-				&etx[i][30], &etx[i][31], &etx[i][32], &etx[i][33],
-				&etx[i][34], &etx[i][35], &etx[i][36], &etx[i][37]);
-	}
-	fclose(fin);
-#ifdef EXOR_DBG
-	printf ("yanhua : read over.");
-#endif
-	//if(i != nNodes)
-	//	printf("nodeId is wrong(i=%d, nNodes=%d)\n", i, nNodes);
-
-}
-
-//-----------yanhua-----------------0304--
-// quick sort
-void AODV::prDstEtx(float num[]) {
-	int i;
-	for (i = 0; i < MAX_FWDER; i++)
-		printf("%.2f \n", num[i]);
-
-	return;
-}
-
-void AODV::prFwList(int num[]) {
-	int i;
-	for (i = 0; i < MAX_FWDER; i++)
-		printf("%d\n", num[i]);
-
-	return;
-}
-
-// quick sort
-void AODV::quickSort(float numbers[], int array_size, int idx[]) {
-	q_sort(numbers, 0, array_size - 1, idx);
-}
-
-void AODV::q_sort(float numbers[], int left, int right, int idx[]) {
-	float pivot;
-	int l_hold, r_hold, pivot_idx;
-
-	l_hold = left;
-	r_hold = right;
-	pivot = numbers[left];
-	pivot_idx = idx[left];
-
-	while (left < right) {
-		while ((numbers[right] >= pivot) && (left < right))
-			right--;
-		if (left != right) {
-			numbers[left] = numbers[right];
-			idx[left] = idx[right];
-			left++;
-		}
-		while ((numbers[left] <= pivot) && (left < right))
-			left++;
-		if (left != right) {
-			numbers[right] = numbers[left];
-			idx[right] = idx[left];
-			right--;
-		}
-	}
-	numbers[left] = pivot;
-	idx[left] = pivot_idx;
-
-	pivot_idx = left;
-	left = l_hold;
-	right = r_hold;
-	if (left < pivot_idx)
-		q_sort(numbers, left, pivot_idx - 1, idx);
-	if (right > pivot_idx)
-		q_sort(numbers, pivot_idx + 1, right, idx);
 }
